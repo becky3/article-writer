@@ -33,10 +33,14 @@ Claude Code セッション内で `/topic` コマンドを実行する。
   template-project.md      -- プロジェクト紹介型テンプレート
   template-tips.md         -- ノウハウ型テンプレート
 
-.tmp/drafts/               -- 生成された記事ドラフト（gitignore）
+.tmp/
+  zenn-drafts/             -- Zenn 記事ドラフト（gitignore）
+  (将来: note-drafts/ 等)  -- プラットフォーム別に追加
 ```
 
 ## 出力
 
-生成された記事は `.tmp/drafts/` に保存される（git 管理外）。
-記事化履歴は `.tmp/drafts/published.txt` に追記される。
+生成された記事はプラットフォーム別のフォルダに保存される（git 管理外）。
+
+- Zenn: `.tmp/zenn-drafts/`
+- 記事化履歴: `.tmp/zenn-drafts/published.txt`
