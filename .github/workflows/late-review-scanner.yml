@@ -1,0 +1,26 @@
+# Late Review Scanner — Caller workflow example
+#
+# This file should be placed in the caller repository as:
+#   .github/workflows/late-review-scanner.yml
+#
+# Required secrets:
+#   - REPO_OWNER_PAT (for resolving review threads on merged PRs)
+
+name: Late Review Scanner
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    uses: becky3/shared-workflows/.github/workflows/late-review-scanner.yml@main
+    with:
+      scan_hours: 24
+    secrets: inherit

@@ -1,0 +1,38 @@
+# Claude Code — Caller Workflow Example
+#
+# このファイルを呼び出し側リポジトリの .github/workflows/claude.yml に配置する。
+# becky3 を GitHub ユーザー名に置き換えること。
+#
+# 前提:
+#   - Secrets: CLAUDE_CODE_OAUTH_TOKEN, REPO_OWNER_PAT
+#   - shared-workflows リポが公開されていること（または同一 org 内でアクセス可能）
+
+name: Claude Code
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned, labeled]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    uses: becky3/shared-workflows/.github/workflows/claude.yml@main
+    with:
+      allowed_user: "becky3"
+      # model: "claude-opus-4-6"       # default
+      # max_turns: 100                  # default
+      auto_progress_prompt: "GA環境専用ルールが .claude/CLAUDE-auto-progress.md にあります。このファイルを必ず読んでから作業を開始してください。ファイルが見つからない・読めない場合は、その旨をIssue/PRにコメントして作業を中断してください。"
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      REPO_OWNER_PAT: ${{ secrets.REPO_OWNER_PAT }}

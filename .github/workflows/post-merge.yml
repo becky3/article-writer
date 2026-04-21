@@ -1,0 +1,22 @@
+# Post Merge — Caller workflow example
+#
+# This file should be placed in the caller repository as:
+#   .github/workflows/post-merge.yml
+#
+# No secrets required (runs with GITHUB_TOKEN).
+
+name: Post Merge
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  post-merge:
+    uses: becky3/shared-workflows/.github/workflows/post-merge.yml@main

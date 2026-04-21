@@ -1,0 +1,42 @@
+# Copilot Auto Fix — Caller workflow example
+#
+# This file should be placed in the caller repository as:
+#   .github/workflows/copilot-auto-fix.yml
+#
+# Required secrets (set in the caller repository):
+#   - CLAUDE_CODE_OAUTH_TOKEN
+#   - REPO_OWNER_PAT
+#
+# Required variables (optional, set in the caller repository):
+#   - COPILOT_REVIEW_TIMEOUT (default: 600 seconds)
+#   - AUTO_MERGE_ENABLED (default: false)
+
+name: Copilot Auto Fix
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: read
+  actions: read
+  id-token: write
+
+on:
+  pull_request:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to process (for manual re-trigger after failure recovery)'
+        required: true
+        type: number
+
+jobs:
+  copilot-auto-fix:
+    uses: becky3/shared-workflows/.github/workflows/copilot-auto-fix.yml@main
+    with:
+      forbidden_patterns: |
+        .env*
+        pyproject.toml
+      # auto_progress_prompt: "Your GA-specific prompt here"
+    secrets: inherit
