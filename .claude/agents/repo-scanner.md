@@ -43,7 +43,7 @@ tools: Bash, Read, Grep, Glob, mcp__rag-knowledge-production__rag_search, mcp__r
 
 100 件を選んだ Why: 直近の活動を広めにカバーしつつ、タイトル一覧の LLM 読み込みコストを抑えるバランス点。期間制約は設けません。
 
-並び順について: `gh issue list` のデフォルト並び順は created 降順であり closedAt 降順を保証しません。`closedAt` フィールドは取得していますが、エージェントは「最新 100 件のクローズ済み Issue」として扱い、厳密な closedAt 順を前提としません（記事化候補の質判定は LLM 側で行うため、並び順の厳密性は要求されない）。
+並び順について: `gh issue list` のデフォルト並び順は created 降順のため closedAt 降順を保証しません。「直近にクローズされた Issue を上位として扱いたい」場合は、取得した結果をエージェント内で `closedAt` 降順に並べ替えてから後続ステップに渡すこと。並び替えは `closedAt` フィールドの値（ISO 8601 文字列）で降順ソートする。
 
 ### 3. タイトルベースの一次絞り込み（LLM 判断）
 
@@ -57,7 +57,7 @@ tools: Bash, Read, Grep, Glob, mcp__rag-knowledge-production__rag_search, mcp__r
 
 ### 4. 詳細評価（本文取得 + 記事化価値判定）
 
-ステップ 3 で絞った候補について `gh issue view --repo <target_repo> <番号>` で本文・コメントを取得し、最終的な記事化価値を判定します:
+ステップ 3 で絞った候補について `gh issue view --repo <target_repo> <番号> --comments` で本文・コメントを取得し、最終的な記事化価値を判定します（`--comments` を付けないとコメントが含まれないため必須）:
 
 - **判定軸**:
   - 経緯・判断・試行錯誤・教訓が実際に読み取れるか

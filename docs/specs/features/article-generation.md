@@ -48,7 +48,7 @@ flowchart LR
     Sources[.claude/sources.yml<br/>対象リポジトリ群] --> Skill
     Skill -->|Phase A 候補化<br/>6 リポ並列起動| Scanner[repo-scanner<br/>サブエージェント x 6]
     Scanner -->|Issue 走査| GH[(GitHub<br/>gh CLI)]
-    Scanner -->|関連ジャーナル検索| RAG[(rag-knowledge<br/>MCP)]
+    Scanner -->|関連ジャーナル検索| RAG[(rag-knowledge-production<br/>MCP)]
     Scanner -->|候補返却| Skill
     Skill -->|Phase B 素材取得| RAG
     Skill -->|Phase B 素材取得| GH

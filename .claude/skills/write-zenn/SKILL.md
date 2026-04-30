@@ -105,11 +105,11 @@ Phase A からの番号返信、または `/write-zenn <テーマ>` によるテ
 
 1. **素材の収集**
    - 番号選択の場合: Phase A で選択された候補に紐付く以下を一括取得する
-     - 関連 Issue 群: `gh issue view --repo <owner>/<name> <番号>` で各 Issue の本文・コメントを取得
+     - 関連 Issue 群: `gh issue view --repo <owner>/<name> <番号> --comments` で各 Issue の本文・コメントを取得（`--comments` 必須）
      - 関連ジャーナル群: `rag_get_document(source_id=...)` で各ジャーナル本文を取得
      - 関連 PR・コード: 必要に応じて `gh pr view` / Glob・Grep で補足取得
    - テーマ指定の場合: テーマをキーに関連素材を自律収集
-     - GitHub Issue: `.claude/sources.yml` の各リポに対して `gh issue list --repo <owner>/<name>` / `gh issue view --repo <owner>/<name> <番号>` を実行
+     - GitHub Issue: `.claude/sources.yml` の各リポに対して `gh issue list --repo <owner>/<name>` / `gh issue view --repo <owner>/<name> <番号> --comments` を実行（コメント取得には `--comments` 必須）
      - 仕様書: `.claude/sources.yml` の各リポについて `${LOCAL_REPOS_ROOT}/<owner>/<name>/docs/specs/` 配下を Glob/Grep で参照
      - ジャーナル: `rag_search(query=<テーマ>, source_type="journal")` で検索
        → 必要な `source_id` のみ `rag_get_document` で全文取得
