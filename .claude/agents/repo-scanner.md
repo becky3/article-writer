@@ -23,7 +23,7 @@ tools: Bash, Read, Grep, Glob, mcp__rag-knowledge-production__rag_search, mcp__r
 - 記事タイトル案: <案>
 - 記事タイプ: 課題解決型 / プロジェクト紹介型 / ノウハウ型
 - 関連 Issue: #N1, #N2, ...（複数 Issue を束ねる場合は全て列挙）
-- 関連ジャーナル source_id: journal/<repo>/<entry>.md（複数可、なければ「なし」と記載）
+- 関連ジャーナル source_id: <`rag_search` が返した `source_id` の値をそのまま列挙、複数可、なければ「なし」と記載>
 - 概要: <1-2 文で記事の主題>
 - 記事化価値の根拠: <なぜ読者に学びがあると判断したか>
 - 価値ランク: 高 / 中 / 低（メインスキル側で件数超過時の上位選択に使用）
@@ -39,9 +39,11 @@ tools: Bash, Read, Grep, Glob, mcp__rag-knowledge-production__rag_search, mcp__r
 
 ### 2. クローズ済み Issue のタイトル一覧取得
 
-`gh issue list --repo <target_repo> --state closed --limit 100 --json number,title,labels,closedAt` で直近クローズ 100 件のタイトル + メタ情報のみ取得します（本文はこの段階では取得しません）。
+`gh issue list --repo <target_repo> --state closed --limit 100 --json number,title,labels,closedAt` でクローズ済み Issue のうち最新 100 件のタイトル + メタ情報のみ取得します（本文はこの段階では取得しません）。
 
 100 件を選んだ Why: 直近の活動を広めにカバーしつつ、タイトル一覧の LLM 読み込みコストを抑えるバランス点。期間制約は設けません。
+
+並び順について: `gh issue list` のデフォルト並び順は created 降順であり closedAt 降順を保証しません。`closedAt` フィールドは取得していますが、エージェントは「最新 100 件のクローズ済み Issue」として扱い、厳密な closedAt 順を前提としません（記事化候補の質判定は LLM 側で行うため、並び順の厳密性は要求されない）。
 
 ### 3. タイトルベースの一次絞り込み（LLM 判断）
 
@@ -70,17 +72,18 @@ tools: Bash, Read, Grep, Glob, mcp__rag-knowledge-production__rag_search, mcp__r
 
 - `rag_search(query=<Issue タイトル/機能名>, source_type="journal")` で関連ジャーナルを探索
 - リポジトリフィルタは `filters="repository=<name>"` で担当リポに絞る（`<name>` は `<owner>/<name>` の name 部分）
-  - フィルタ仕様の詳細は rag-knowledge MCP 側に従う。本プロジェクトの sources.yml は単一 owner（`becky3`）配下のため `<name>` のみで衝突しない前提
+  - フィルタ仕様の詳細は rag-knowledge MCP 側に従う。本プロジェクトの sources.yml は単一 owner（`becky3`）配下かつ name レベルで衝突がない前提
+  - 将来 sources.yml に別 owner や同名リポが追加された場合、本フィルタは誤マッチを起こしうる（owner 違いの同名リポを区別できないため）。MCP 側が `<owner>/<name>` 形式のフィルタをサポートする・あるいは sources.yml の name ユニーク性を検証する仕組みを追加する等、別 Issue で対応する想定
 - ヒットしたジャーナルのうち関連性が高いものを `rag_get_document(source_id=...)` で本文取得
 - ジャーナルの「気づき」「判断」「教訓」「残課題」等のセクション内容で記事化イメージを補強・確認
 
-### 6. 重複意識（強制除外なし）
+### 6. 重複意識
 
-ステップ 1 で取得した過去記事タイトルと方向性が近い候補は、優先度を下げて検討します:
+ステップ 1 で取得した過去記事タイトルと方向性が近い候補は、価値ランクを下げて検討します（強制除外はしない）:
 
-- **完全に同じテーマの再記事化は想定外**（候補から外す）
-- **方向性が近い・近接話題**（同じ機能領域・近い視点）は候補に含めてよいが、価値ランクを下げる
-- 判定は意味的判断（キーワード一致ではない）。判断結果による強制除外ロジックは持たない
+- **完全に同じテーマの再記事化**: 価値ランク「低」相当として扱う。候補に出すこと自体は許容
+- **方向性が近い・近接話題**（同じ機能領域・近い視点）: 同様に価値ランクを下げる
+- 判定は意味的判断（キーワード一致ではない）。除外判定は行わず、最終的な取捨選択はメインスキル側の集約・ユーザーに委ねる
 
 ### 7. 候補の形式化と返却
 
