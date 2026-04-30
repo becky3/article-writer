@@ -16,7 +16,7 @@
 
 - 生成される記事ドラフトは `published: false` 等のプラットフォーム既定の非公開状態とする。公開判断は人間が行う
 - 生成された記事は必ずレビューしてから公開する（事実確認・推敲・正直さの観点）
-- 出力先は `articles/{platform}/{YYYYMMDD-HHMMSS}-{slug}.md` とし、git 管理下に置く（記事の経緯と差分を git で追跡可能にする）
+- 出力先は `articles/{platform}/{YYYYMMDD-HHMMSS}-{article-slug}.md` とし、git 管理下に置く（記事の経緯と差分を git で追跡可能にする）
 - `{platform}` の命名はスキル名 `/write-{platform}` の `{platform}` 部分と一致させる。SSoT は各スキル SKILL.md
 - 著作物・実在する個人/作品由来の固有名詞・特徴的言い回しを記事本文に混入しない（`~/.claude/rules/invariants.md` 準拠）
 - 素材源として参照する対象リポジトリは `.claude/sources.yml` で一元管理する。各リポのローカルパスは環境変数 `LOCAL_REPOS_ROOT` を起点に `${LOCAL_REPOS_ROOT}/<owner>/<name>` で解決する

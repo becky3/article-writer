@@ -2,7 +2,7 @@
 #
 # 用途:
 #   - GitHub Issue 横断検索（gh issue list --repo <owner/name>）
-#   - 各リポの docs/specs/*.md スキャン
+#   - 各リポの docs/specs/**/*.md スキャン（再帰）
 #   - RAG 取得時の repository フィルタ
 #
 # パス解決:

@@ -37,7 +37,7 @@ Claude Code セッション内で `/write-zenn` コマンドを実行する。
 
 articles/
   zenn/                    -- Zenn 記事ファイル（git 管理下）
-    YYYYMMDD-HHMMSS-{slug}.md
+    YYYYMMDD-HHMMSS-{article-slug}.md
     published.txt          -- 記事化履歴
 ```
 
@@ -57,5 +57,5 @@ LOCAL_REPOS_ROOT=D:/GitHub
 
 生成された記事は git 管理下の `articles/{platform}/` に保存される。
 
-- Zenn: `articles/zenn/{YYYYMMDD-HHMMSS}-{slug}.md`
+- Zenn: `articles/zenn/{YYYYMMDD-HHMMSS}-{article-slug}.md`
 - 記事化履歴: `articles/zenn/published.txt`
