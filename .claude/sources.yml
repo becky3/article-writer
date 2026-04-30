@@ -1,0 +1,27 @@
+# 記事生成スキル等が参照するリポジトリ群
+#
+# 用途:
+#   - GitHub Issue 横断検索（gh issue list --repo <owner/name>）
+#   - 各リポの docs/specs/*.md スキャン
+#   - RAG 取得時の repository フィルタ
+#
+# パス解決:
+#   - 環境変数 LOCAL_REPOS_ROOT（例: D:/GitHub）が必要
+#   - 各リポのローカルパス = ${LOCAL_REPOS_ROOT}/<owner>/<name>
+#   - 未設定の場合はスキル側でエラー停止
+#
+# 編集時の注意:
+#   - 1 行 1 リポ。owner/name 形式（gh CLI の --repo 引数と互換）
+#   - 順序は記事候補の表示順序に影響しない（実装側でソート）
+
+repositories:
+  - becky3/agent-commons
+  - becky3/ai-assistant
+  - becky3/rag-knowledge
+  - becky3/article-writer
+  - becky3/shared-workflows
+  - becky3/knowledge-ingest-pipeline
+  - becky3/py-common-lib
+  - becky3/my-life
+  - becky3/comfyui-workspace
+  - becky3/becky3.github.io
