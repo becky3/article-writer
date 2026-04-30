@@ -16,7 +16,7 @@ tools: Bash, Read, Grep, Glob, mcp__rag-knowledge-production__rag_search, mcp__r
 
 ## 出力
 
-記事化候補を以下の形式で返します。0〜複数件。各候補は **トピック見出し + Markdown テーブル**で構成し、項目は 6 つに固定します。
+記事化候補を以下の形式で返します。0〜複数件。各候補は **トピック見出し（1 行）と Markdown テーブル（5 項目）** で構成します。
 
 ```markdown
 ### トピック N: <トピック見出し>

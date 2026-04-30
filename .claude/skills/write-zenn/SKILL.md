@@ -72,7 +72,9 @@ worktree 内で実行された場合でも、共有資源（`articles/`）は本
 
 4. **候補表示**
 
-   候補は記事タイプ別にグループ化し、**通し番号**（記事タイプ間で連続）で表示する。ユーザーは番号を返信して候補を選択するため、グループ毎にリセットしない。各候補は **トピック見出し + Markdown テーブル**で表示する:
+   候補は記事タイプ別にグループ化し、**通し番号**（記事タイプ間で連続）で表示する。ユーザーは番号を返信して候補を選択するため、グループ毎にリセットしない。各候補は **トピック見出し + Markdown テーブル**で表示する。
+
+   サブエージェント側の見出しは `### トピック N: <見出し>` 形式（N は当該リポ内の通番）だが、メインスキルでは集約時に **記事タイプ間で連続する通し番号** に振り直し、`### M. <見出し>` 形式に正規化する（M は全体通し番号）。サブエージェントの N は表示時に破棄する。
 
    ```markdown
    📚 学びトピック候補
@@ -114,7 +116,7 @@ worktree 内で実行された場合でも、共有資源（`articles/`）は本
 
 5. **ユーザーの返事を待つ**
    - ユーザーが番号で返事 → Phase B へ進む
-   - Phase B へは「選択された候補の関連 Issue 群 + トピック・提案理由」を引き継ぐ。関連ジャーナルはサブエージェント側では出力しないため、Phase B の素材収集ステップでメインスキルが `rag_search` で再検索する
+   - Phase B へは「選択された候補の関連 Issue 群 + トピック見出し + トピック + 提案理由」を引き継ぐ。関連ジャーナルはサブエージェント側では出力しないため、Phase B の素材収集ステップでメインスキルが `rag_search` で再検索する
 
 ### B. 記事生成
 
@@ -124,8 +126,9 @@ Phase A からの番号返信、または `/write-zenn <テーマ>` によるテ
    - 番号選択の場合: Phase A で選択された候補に紐付く以下を一括取得する
      - 関連 Issue 群: `gh issue view --repo <owner>/<name> <番号> --comments` で各 Issue の本文・コメントを取得（`--comments` 必須）
      - 関連ジャーナル群: Phase A の候補にはジャーナル `source_id` が含まれないため、本ステップで再検索する。
-       `rag_search(query=<トピック見出し or 関連 Issue タイトル>, source_type="journal", filters="repository=<name>")` で
-       候補リポのジャーナルを探索し、関連性の高いものを `rag_get_document(source_id=...)` で本文取得
+       `rag_search(query=<トピック見出し or 関連 Issue タイトル>, source_type="journal", filters="repository=<repo_name>")` で
+       候補リポのジャーナルを探索し、関連性の高いものを `rag_get_document(source_id=...)` で本文取得。
+       `<repo_name>` は `<owner>/<repo_name>` の repo_name 部分（owner は含めない）
      - 関連 PR・コード: 必要に応じて `gh pr view` / Glob・Grep で補足取得
    - テーマ指定の場合: テーマをキーに関連素材を自律収集
      - GitHub Issue: `.claude/sources.yml` の各リポに対して `gh issue list --repo <owner>/<name>` / `gh issue view --repo <owner>/<name> <番号> --comments` を実行（コメント取得には `--comments` 必須）
