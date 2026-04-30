@@ -2,7 +2,7 @@
 name: write-zenn
 description: Zenn形式の技術記事を生成（候補提案 / テーマ指定の両モード対応）
 user-invocable: true
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob, mcp__rag-knowledge-production__rag_list_recent, mcp__rag-knowledge-production__rag_search, mcp__rag-knowledge-production__rag_get_document
+allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Task, mcp__rag-knowledge-production__rag_search, mcp__rag-knowledge-production__rag_get_document
 argument-hint: "[テーマ]"
 ---
 
@@ -48,55 +48,66 @@ worktree 内で実行された場合でも、共有資源（`articles/`）は本
 
 ### A. トピック候補提案（引数なし）
 
-1. **ジャーナル一覧の取得**
-   - `rag_list_recent(source_type="journal", limit=50)` — RAG に取り込まれたジャーナル一覧
-   - `.claude/sources.yml` の `repositories` を読み、各 `<owner>/<name>` の `<name>` 部分を `filters="repository=<name1>,repository=<name2>,..."` 等で絞り込む（フィルタ仕様は MCP 側に従う。複数指定が不可な場合はリポ別に逐次取得する）
-   - 各結果の `source_id` 値を控える。以後 `rag_get_document(source_id=...)` には
-     この値をそのまま渡す。この時点では本文を取得しない
+機能作成・エージェント改修のような「複数 Issue / 複数 PR / 複数ジャーナルにまたがる継続的な開発知見」を 1 つのトピック候補として束ねるため、リポジトリごとにサブエージェント `repo-scanner` を並列起動して候補を集約する。
 
-2. **プロジェクトテーマのスキャン**
-   - `.claude/sources.yml` の各リポについて、`${LOCAL_REPOS_ROOT}/<owner>/<name>/docs/specs/` が存在する場合のみ `docs/specs/**/*.md` を読む — 仕様書から記事化できそうなテーマを抽出
-   - `.claude/sources.yml` の各リポについて、`gh issue list --repo <owner>/<name> --state closed` を実行して完了済み Issue を取得する
+1. **対象リポの選定**
+   - **固定 3 リポ**: `becky3/agent-commons` / `becky3/rag-knowledge` / `becky3/ai-assistant`（活動量が多く、開発知見が継続的に蓄積されるリポ）
+   - **ランダム 3 リポ**: `.claude/sources.yml` の `repositories` から固定 3 リポを除いた残り全件をランダムシャッフルし、先頭 3 件を抽出
+   - 合計 6 リポを並列スキャン対象とする
+   - シードは固定しない（毎回完全ランダム）
 
-3. **候補絞り込みと本文取得**
-   - ステップ 1 のジャーナル一覧（タイトル・published_at）から記事化できそうな候補を絞る
-   - 絞った候補のみ `rag_get_document(source_id=...)` で本文を取得する（全件取得は禁止）
+2. **repo-scanner サブエージェントの並列起動**
+   - 上記 6 リポについて、`Task` ツールで `subagent_type=repo-scanner` を 6 並列で起動する
+   - 各サブエージェントへの入力: `target_repo`（担当リポ、`<owner>/<name>` 形式）
+   - 過去記事タイトルはサブエージェント側で `articles/zenn/published.txt` を直接 `Read` する
+   - 各サブエージェントは内部で「タイトル一覧取得 → LLM 判断による一次絞り込み → 詳細評価（本文取得）→ 関連ジャーナル検索 → 候補を返却」を実行する
+   - サブエージェント定義: `.claude/agents/repo-scanner.md` を参照
 
-4. **トピック抽出ルール**（取得済み本文に対して適用）
-   - ジャーナル形式: 本文中の `- **気づき**:` / `- **判断**:` / `- **教訓**:` を検出しトピック候補として抽出
-   - プロジェクトテーマ: 仕様書のタイトル・概要、Issue のタイトルから「記事にできそうなテーマ」を抽出
-   - 「教訓」「対応」キーワードがあれば優先度UP
-   - **自動除外はしない**（過去に記事化したトピックも候補に表示）
+3. **候補の集約**
+   - 6 サブエージェントの返却結果を統合する
+   - 各候補に付与された `価値ランク`（高 / 中 / 低）を用い、全体で多すぎる場合（10 件超）は高ランクから優先して上位 10 件を選ぶ
+   - 同じ Issue 番号を複数のサブエージェントが返した場合（リポ範囲が排他のため通常起きない異常ケース）は、価値ランクが高い側を採用する
+   - 0 件返却のサブエージェントがあっても全体としては問題ない（他リポの候補で表示）
+   - 各サブエージェントの返却末尾に `[警告] ...` がある場合は、Phase A の候補表示末尾に注記として転記する
 
-5. **候補表示**
+4. **候補表示**
+
+   候補は記事タイプ別にグループ化し、**通し番号**（記事タイプ間で連続）で表示する。ユーザーは番号を返信して候補を選択するため、グループ毎にリセットしない:
 
    ```text
    📚 学びトピック候補
 
-   ── TIL・ハマりネタ ──
-   1. [★★] RSS 1.0形式での日付取得失敗（journal:20260215-xxx）
-   2. [★★] skip-summary実装時のコード重複（journal:20260214-xxx）
+   ── 課題解決型 ──
+   1. <記事タイトル案>（<owner>/<name>: 関連 Issue #N1, #N2 / 関連ジャーナル N 件）
+   2. ...
 
-   ── プロジェクト紹介ネタ ──
-   3. auto-fixワークフロー（Issue → 実装 → レビュー → マージの全自動パイプライン）
-   4. エージェントチーム機能（複数AIが協調して開発タスクを処理）
+   ── プロジェクト紹介型 ──
+   3. <記事タイトル案>（<owner>/<name>: 関連 Issue #N1 / 関連ジャーナル N 件）
+   4. ...
+
+   ── ノウハウ型 ──
+   5. ...
 
    👉 番号を返事してください
-
-   ---
-   📰 過去の記事化履歴（参考）
-   - (2026-02-10) Pythonでプロセス生存確認を実装したら...: journal:20260210-xxx
    ```
 
-6. **ユーザーの返事を待つ**
+   - 各候補の概要（1〜2 文）を表示する
+   - 該当する記事タイプにグループがない場合はそのグループ自体を省略する
+   - サブエージェントから警告がある場合は表示末尾に `⚠️ <警告内容>` で注記する
+
+5. **ユーザーの返事を待つ**
    - ユーザーが番号で返事 → Phase B へ進む
+   - Phase B へは「選択された候補の関連 Issue 群 + 関連ジャーナル source_id 群」を引き継ぐ
 
 ### B. 記事生成
 
 Phase A からの番号返信、または `/write-zenn <テーマ>` によるテーマ直接指定、いずれの場合も以下の流れで記事を生成する。
 
 1. **素材の収集**
-   - 番号選択の場合: Phase A で控えた `source_id` に対し `rag_get_document(source_id=...)` で本文を取得し、該当セクションを抽出
+   - 番号選択の場合: Phase A で選択された候補に紐付く以下を一括取得する
+     - 関連 Issue 群: `gh issue view --repo <owner>/<name> <番号>` で各 Issue の本文・コメントを取得
+     - 関連ジャーナル群: `rag_get_document(source_id=...)` で各ジャーナル本文を取得
+     - 関連 PR・コード: 必要に応じて `gh pr view` / Glob・Grep で補足取得
    - テーマ指定の場合: テーマをキーに関連素材を自律収集
      - GitHub Issue: `.claude/sources.yml` の各リポに対して `gh issue list --repo <owner>/<name>` / `gh issue view --repo <owner>/<name> <番号>` を実行
      - 仕様書: `.claude/sources.yml` の各リポについて `${LOCAL_REPOS_ROOT}/<owner>/<name>/docs/specs/` 配下を Glob/Grep で参照
@@ -163,20 +174,7 @@ Phase A からの番号返信、または `/write-zenn <テーマ>` によるテ
 
 **記事生成前に必ず `.claude/skills/write-zenn/quality-guidelines.md` を読み込むこと。**
 
-## 抽出ロジック詳細
-
-### 優先度スコアリング
-
-候補一覧の並び順に使用する。
-
-| 条件 | スコア加算 |
-|------|-----------|
-| セクションに「教訓」が含まれる | +2 |
-| セクションに「対応」が含まれる | +1 |
-| コードブロックが含まれる | +1 |
-| 「問題」「原因」キーワードがある | +1 |
-
-### ソース参照形式
+## ソース参照形式
 
 `{source_type}:{source_id}` または `{source_type}:{source_id}#{fragment}`
 
@@ -186,8 +184,10 @@ Phase A からの番号返信、または `/write-zenn <テーマ>` によるテ
 - ジャーナル内の特定セクション: `journal:20260217-xxx#3`（3 番目の `###` 見出し）
 - 同一ジャーナル内の複数トピックを `published.txt` で区別する用途等にフラグメントを使う
 
-`source_id` は `rag_list_recent` / `rag_search` の結果に含まれる `source_id` 値をそのまま使用する。
+`source_id` は `rag_search` の結果に含まれる `source_id` 値をそのまま使用する。
 `rag_get_document(source_id=...)` で全文取得が可能。フラグメントは記事の参照性のための任意付加。
+
+候補抽出ロジックの詳細は `.claude/agents/repo-scanner.md` を参照。
 
 ## エラーハンドリング
 

@@ -20,6 +20,7 @@
 - `{platform}` の命名はスキル名 `/write-{platform}` の `{platform}` 部分と一致させる。SSoT は各スキル SKILL.md
 - 著作物・実在する個人/作品由来の固有名詞・特徴的言い回しを記事本文に混入しない（`~/.claude/rules/invariants.md` 準拠）
 - 素材源として参照する対象リポジトリは `.claude/sources.yml` で一元管理する。各リポのローカルパスは環境変数 `LOCAL_REPOS_ROOT` を起点に `${LOCAL_REPOS_ROOT}/<owner>/<name>` で解決する
+- トピック候補化（Phase A）はリポジトリ単位のサブエージェント（`repo-scanner`）を並列起動して候補を集約する。対象リポは「固定 3 リポ + ランダム 3 リポ」の合計 6 リポを毎回選定する（活動量の多いリポを継続的にカバーしつつ、他リポも探索対象に含める意図）
 
 ## 操作一覧
 
@@ -45,9 +46,13 @@ Zenn 形式の技術記事ドラフトを生成するスキル。
 flowchart LR
     User[ユーザー] -->|/write-zenn| Skill[write-zenn スキル]
     Sources[.claude/sources.yml<br/>対象リポジトリ群] --> Skill
-    Skill -->|素材取得| RAG[(rag-knowledge<br/>MCP)]
-    Skill -->|素材取得| GH[(GitHub<br/>gh CLI)]
-    Skill -->|素材取得| Local[ローカルファイル<br/>各リポの docs/specs 等]
+    Skill -->|Phase A 候補化<br/>6 リポ並列起動| Scanner[repo-scanner<br/>サブエージェント x 6]
+    Scanner -->|Issue 走査| GH[(GitHub<br/>gh CLI)]
+    Scanner -->|関連ジャーナル検索| RAG[(rag-knowledge<br/>MCP)]
+    Scanner -->|候補返却| Skill
+    Skill -->|Phase B 素材取得| RAG
+    Skill -->|Phase B 素材取得| GH
+    Skill -->|Phase B 素材取得| Local[ローカルファイル<br/>各リポの docs/specs 等]
     Skill -->|生成| Article[articles/zenn/<br/>記事ファイル<br/>git 管理下]
     Article -->|人手レビュー| Publish[Zenn 公開]
 ```
@@ -57,4 +62,5 @@ flowchart LR
 - `.claude/skills/write-zenn/SKILL.md`: `/write-zenn` スキル本体（動作仕様）
 - `.claude/skills/write-zenn/quality-guidelines.md`: 執筆品質ガイドライン
 - `.claude/skills/write-zenn/template-*.md`: 記事タイプ別テンプレート
+- `.claude/agents/repo-scanner.md`: Phase A の候補抽出を担当するサブエージェント定義
 - `.claude/sources.yml`: 素材源として参照する対象リポジトリ一覧
