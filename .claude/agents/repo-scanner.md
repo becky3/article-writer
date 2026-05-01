@@ -56,6 +56,8 @@ tools: Bash, Read, Grep, Glob, mcp__rag-knowledge-production__rag_search, mcp__r
 | 原典にない比較・評価 | 「業界で類を見ない」「他にない」 |
 | キャッチコピー化のための脚色 | 「あなたも知らない…」のような釣り表現 |
 
+加えて、トピック見出しに **記事の主題（thesis）を勝手に作らない**。詳細は `.claude/skills/write-zenn/quality-guidelines.md`「主題（thesis）の扱い」を SSoT として参照する。
+
 許容される操作:
 
 - **抽象化・要約**: 原典の複数記述を 1 文に集約する

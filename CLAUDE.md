@@ -11,5 +11,10 @@
 
 ## Git 運用
 
-- `main` ブランチのみ（シンプル運用）
-- コミット: `type(scope): 説明`
+- 常設ブランチは `main` のみ（`develop` なし、シンプル運用）
+- 作業ブランチ: `feature/{機能名}-#{Issue番号}` を切って PR 経由で `main` へマージ
+- コミット: `type(scope): 説明 (#Issue番号)`
+
+## 作業フロー
+
+記事執筆と、執筆中のフィードバックをスキル/ルール側に還元する作業フローは [docs/workflows/article-writing-workflow.md](docs/workflows/article-writing-workflow.md) を参照。

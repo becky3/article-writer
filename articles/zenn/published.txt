@@ -1,0 +1,1 @@
+- (2026-05-01) Slack で動くローカル LLM チャット bot を作った話 — ai-assistant の仕組み紹介: github:becky3/ai-assistant#10, github:becky3/ai-assistant#5, github:becky3/ai-assistant#815, journal:20260421-170159-feed-thread-blockkit-fix
