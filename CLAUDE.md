@@ -18,3 +18,7 @@
 ## 作業フロー
 
 記事執筆と、執筆中のフィードバックをスキル/ルール側に還元する作業フローは [docs/workflows/article-writing-workflow.md](docs/workflows/article-writing-workflow.md) を参照。
+
+## ルール
+
+リポジトリ固有のルール（編集時の Edit 強制等）は [.claude/rules/conventions.md](.claude/rules/conventions.md) を参照。
