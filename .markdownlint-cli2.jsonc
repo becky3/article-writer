@@ -14,6 +14,7 @@
   },
   "ignores": [],
   "globs": [
+    "articles/**/*.md",
     "docs/**/*.md",
     "*.md",
     ".claude/**/*.md",
