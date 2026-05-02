@@ -1,1 +1,2 @@
 - (2026-05-01) Slack で動くローカル LLM チャット bot を作った話 — ai-assistant の仕組み紹介: github:becky3/ai-assistant#10, github:becky3/ai-assistant#5, github:becky3/ai-assistant#815, journal:20260421-170159-feed-thread-blockkit-fix
+- (2026-05-02) Claude Code に code コマンドを使わせるとレビュー動線が一気に楽になる: github:becky3/article-writer#24, github:becky3/agent-commons#313, github:becky3/agent-commons#315
