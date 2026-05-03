@@ -41,6 +41,7 @@ ls ~/.claude/projects/
 
 - `~/.claude` の場所は環境変数 `CLAUDE_CONFIG_DIR` を設定すると変更できます。設定している場合は配下の `projects/` も連動してそちらに移ります。Windows では `~/.claude` は `%USERPROFILE%\.claude` に解決されます。
 - `CLAUDE_CODE_SKIP_PROMPT_HISTORY=1` を設定するとセッションログ自体が書き込まれなくなるため、このフラグを有効にしている場合は調査対象のセッションログが残っていない点に注意してください。
+
 :::
 
 ## 対象セッションの見つけ方
