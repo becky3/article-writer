@@ -37,7 +37,8 @@ Zenn 形式の技術記事ドラフトを生成するスキル。
 - **トリガー**: Claude Code セッション内で `/write-zenn` をスラッシュコマンドとして実行
 - **入力**: 引数なし（トピック候補から選択）または `<テーマ>`（自由文での直接指定）
 - **素材**: `.claude/sources.yml` に記載された対象リポジトリ群を横断する。素材源はジャーナル（RAG 経由）・GitHub Issue（`gh` CLI）・各リポの `docs/specs/` 配下・関連コード
-- **出力**: `articles/zenn/{YYYYMMDD-HHMMSS}-{article-slug}.md`、および `articles/zenn/published.txt` への記事化履歴追記
+- **出力**: `articles/zenn/{YYYYMMDD-HHMMSS}-{article-slug}.md`
+- **公開後の追記**: 記事公開後にユーザー指示を受けたタイミングで、`articles/zenn/published.txt` に記事化履歴を追記する
 - **動作仕様の詳細**（処理手順・記事タイプ判定ロジック・テンプレート・品質ガイドライン）: `.claude/skills/write-zenn/SKILL.md` および同階層の関連ファイルに保持する
 
 ## コンポーネント構成

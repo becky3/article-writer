@@ -1,2 +1,3 @@
 - (2026-05-01) Slack で動くローカル LLM チャット bot を作った話 — ai-assistant の仕組み紹介: github:becky3/ai-assistant#10, github:becky3/ai-assistant#5, github:becky3/ai-assistant#815, journal:20260421-170159-feed-thread-blockkit-fix
-- (2026-05-02) Claude Code に code コマンドを使わせるとレビュー動線が一気に楽になる: github:becky3/article-writer#24, github:becky3/agent-commons#313, github:becky3/agent-commons#315
+- (2026-05-02) Claude Code が言及したファイルを直接エディタで開かせたい: github:becky3/article-writer#24, github:becky3/agent-commons#313, github:becky3/agent-commons#315
+- (2026-05-03) Claude Code のセッションログから過去のやり取りをたどる方法: github:becky3/article-writer#12, github:becky3/agent-commons#248, github:becky3/agent-commons#251, github:becky3/rag-knowledge#682, journal:20260425-082743-pr657-scope-deviation-investigation, journal:20260425-115333-investigate-history-skill-creation
