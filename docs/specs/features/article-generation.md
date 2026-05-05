@@ -4,7 +4,7 @@
 
 開発知見（ジャーナル / GitHub Issue / 仕様書 / コード）を素材として、技術記事ドラフトを Claude Code スキル経由で生成する機能。
 
-プラットフォームごとに独立したスキルを提供する。現時点では Zenn 向けの `/write-zenn` のみを提供する。
+プラットフォームごとに独立したスキルを提供する。現時点では Zenn 向けの記事生成スキル `/write-zenn` を提供する。生成後の品質確認用として、観点別エージェント並列レビューを行う `/multi-perspective-review` も併せて提供する。
 
 ## 背景
 
@@ -27,6 +27,7 @@
 | 操作 | トリガー | 概要 |
 |---|---|---|
 | `/write-zenn` | Claude Code セッション内のスラッシュコマンド | Zenn 形式の技術記事ドラフトを生成する |
+| `/multi-perspective-review` | Claude Code セッション内のスラッシュコマンド | 記事 markdown を観点別エージェントで並列レビューする（公開前の最終確認用、任意起動） |
 
 ## 各操作の仕様
 
@@ -40,6 +41,17 @@ Zenn 形式の技術記事ドラフトを生成するスキル。
 - **出力**: `articles/zenn/{YYYYMMDD-HHMMSS}-{article-slug}.md`
 - **公開後の追記**: 記事公開後にユーザー指示を受けたタイミングで、`articles/zenn/published.txt` に記事化履歴を追記する
 - **動作仕様の詳細**（処理手順・記事タイプ判定ロジック・テンプレート・品質ガイドライン）: `.claude/skills/write-zenn/SKILL.md` および同階層の関連ファイルに保持する
+
+### `/multi-perspective-review`
+
+記事 markdown を観点別エージェントで並列レビューするスキル。
+
+- **トリガー**: Claude Code セッション内で `/multi-perspective-review <対象ファイルパス> [観点1,観点2,...]` をスラッシュコマンドとして実行
+- **入力**: 必須引数として記事 markdown ファイルパス。任意引数として観点リスト（カンマ区切り）。観点を省略するとデフォルト 5 観点（構成・主題整合性 / 冗長性・重複 / 読者視点 / 文体一貫性 / ガイドライン準拠チェック）で並列起動する
+- **対象**: 記事 markdown 専用（`articles/zenn/*.md` を主想定）。仕様書・README・コード等の非記事文書は対象外
+- **起動タイミング**: 記事生成完了後・公開前の最終確認用、任意起動。`/write-zenn` からの自動呼び出しはしない
+- **出力**: `.tmp/multi-perspective-review/{YYYYMMDD-HHMMSS}-{slug}.md`（観点別の指摘集約レポート）。出力後 `code` コマンドで自動オープン
+- **動作仕様の詳細**（観点定義・サブエージェント並列起動手順・出力フォーマット）: `.claude/skills/multi-perspective-review/SKILL.md` に保持する
 
 ## コンポーネント構成
 
@@ -61,7 +73,8 @@ flowchart LR
 ## 関連ドキュメント
 
 - `.claude/skills/write-zenn/SKILL.md`: `/write-zenn` スキル本体（動作仕様）
-- `.claude/skills/write-zenn/quality-guidelines.md`: 執筆品質ガイドライン
+- `.claude/skills/write-zenn/quality-guidelines.md`: 執筆品質ガイドライン（`/multi-perspective-review` のガイドライン準拠チェック観点もこれを参照する）
 - `.claude/skills/write-zenn/template-*.md`: 記事タイプ別テンプレート
+- `.claude/skills/multi-perspective-review/SKILL.md`: `/multi-perspective-review` スキル本体（観点別並列レビュー）
 - `.claude/agents/repo-scanner.md`: Phase A の候補抽出を担当するサブエージェント定義
 - `.claude/sources.yml`: 素材源として参照する対象リポジトリ一覧
