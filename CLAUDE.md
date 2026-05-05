@@ -5,7 +5,8 @@
 ## プロジェクト概要
 
 - プラットフォーム別スキルで記事を生成する Claude Code スキルプロジェクト
-- 現在は Zenn 形式に対応（`/write-zenn`）
+- 記事生成スキル: `/write-zenn`（Zenn 形式）
+- 記事レビュースキル: `/multi-perspective-review`（観点別エージェント並列レビュー、生成後の品質確認用）
 - 生成記事は `articles/{platform}/{YYYYMMDD-HHMMSS}-{article-slug}.md`（git 管理下）に出力
 - 素材源として参照する対象リポジトリは `.claude/sources.yml` で管理。ローカルパス解決には環境変数 `LOCAL_REPOS_ROOT` を使用
 
