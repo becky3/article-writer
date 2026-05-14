@@ -12,7 +12,12 @@
     "MD041": false,
     "MD060": false
   },
-  "ignores": [],
+  "ignores": [
+    // 生成された日記記事は、フロントマター + H1 重複（MD025）・HTML 埋め込み（MD033）・
+    // 日本語段落の line-length 超過（MD013）が頻発するため lint 対象外とする。
+    // 日記記事は人手レビューを経て公開する前提で、機械的 lint の便益が低い。
+    "articles/hatena/**/*.md"
+  ],
   "globs": [
     "articles/**/*.md",
     "docs/**/*.md",
