@@ -58,12 +58,13 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 1. 対象記事の選択（`DATE` 指定時はファイル名前方一致、未指定時は最新）
 2. フロントマター（`title` / `date` / `category`）解析と本文取得
 3. 本文先頭の `# <title>` 行剥がし（はてなブログはエントリ title を別管理するため重複を避ける）
-4. `published.txt` の重複検知（フロントマターの `date:` と同じ日付のエントリが既にあるか）
-5. `.env` から `HATENA_ID` / `HATENA_BLOG_ID` を取得
-6. keyring から `HATENA_API_KEY` を取得
-7. Atom Entry XML を組み立て（`<title>` / `<updated>`（フロントマター `date:` を JST 0 時として ISO 8601 化、はてなブログ管理画面で公開予定日として表示される） / `<content type="text/x-markdown">` / `<app:draft>yes</app:draft>` / `<category term="...">`）
-8. Basic 認証で POST
-9. 成功時に `published.txt` へ追記（`- (diary_date) title` 形式）し、Entry ID と編集 URL を表示。追記が I/O 失敗した場合は WARNING を出し、追記すべき 1 行を明示して終了コード `1` で返す（投稿自体は成功している点を明示）
+4. **簡素記法ブロックを HTML に展開**: `scripts/convert_article_html.py` の `convert()` を呼び、`:::l` / `:::r` / `:::bluesky` を対応 HTML へ変換する（記法仕様は `.claude/skills/write-hatena-diary/balloon-html.md`）。変換エラー時はスクリプト全体を停止
+5. `published.txt` の重複検知（フロントマターの `date:` と同じ日付のエントリが既にあるか）
+6. `.env` から `HATENA_ID` / `HATENA_BLOG_ID` を取得
+7. keyring から `HATENA_API_KEY` を取得
+8. Atom Entry XML を組み立て（`<title>` / `<updated>`（フロントマター `date:` を JST 0 時として ISO 8601 化、はてなブログ管理画面で公開予定日として表示される） / `<content type="text/x-markdown">` / `<app:draft>yes</app:draft>` / `<category term="...">`）
+9. Basic 認証で POST
+10. 成功時に `published.txt` へ追記（`- (diary_date) title` 形式）し、Entry ID と編集 URL を表示。追記が I/O 失敗した場合は WARNING を出し、追記すべき 1 行を明示して終了コード `1` で返す（投稿自体は成功している点を明示）
 
 ### Phase 3: 結果報告
 
@@ -94,6 +95,7 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 | 引数の日付形式が不正 | スクリプトがエラー表示 + 停止 |
 | フロントマター（`title` / `date`）が未設定 | スクリプトがエラー表示 + 停止 |
 | フロントマター `date:` が `YYYY-MM-DD` 形式でない | スクリプトがエラー表示 + 停止（`<updated>` 組み立て前に検証する） |
+| 簡素記法ブロック（`:::l` / `:::r` / `:::bluesky`）の構文エラー（未閉鎖・必須キー欠落等） | スクリプトがエラー表示 + 停止。エラーメッセージは行番号付き |
 | 同じ日付のエントリが既に `published.txt` に存在（重複検知） | スクリプトが警告 + 停止。再投稿が妥当なら `--force` で再実行する |
 | HTTP 401 / 403 | API キーまたは権限不足。keyring 登録値とブログオーナー権限を確認 |
 | HTTP 5xx / タイムアウト | リトライは実装しない。少し時間を置いてから再実行する |
@@ -111,6 +113,8 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 ## 関連
 
 - `scripts/publish_hatena.py`: 投稿スクリプト本体
+- `scripts/convert_article_html.py`: 簡素記法 → HTML 変換（本スクリプトが投稿前に呼ぶ）
 - `.claude/skills/write-hatena-diary/SKILL.md`: 日記記事の生成スキル
 - `.claude/skills/write-hatena-diary/template-diary.md`: 記事テンプレート（フロントマター仕様・記法ポリシー）
+- `.claude/skills/write-hatena-diary/balloon-html.md`: 簡素記法仕様（吹き出し・Bluesky）
 - `articles/hatena/published.txt`: 公開済み記録（本スキルが追記する）

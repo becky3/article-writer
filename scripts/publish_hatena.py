@@ -32,6 +32,8 @@ import xml.etree.ElementTree as ET
 
 import keyring
 
+import convert_article_html
+
 SERVICE = "article-writer"
 KEY_API_KEY = "HATENA_API_KEY"
 
@@ -319,6 +321,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     category = frontmatter.get("category")
     body = strip_leading_h1(body, title)
+    try:
+        body = convert_article_html.convert(body)
+    except convert_article_html.ConvertError as e:
+        raise SystemExit(f"❌ 記事本文の簡素記法変換に失敗: {e}") from e
 
     already_published = check_duplicate(diary_date)
     if already_published and not args.force:
