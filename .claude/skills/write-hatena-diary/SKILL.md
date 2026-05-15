@@ -103,7 +103,7 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
    各投稿について Phase 2 で取得したメタデータを CLI 引数に渡して呼ぶ:
    `--did` / `--cid` / `--rkey` / `--handle` / `--display-name` / `--text` / `--created-at` / `--lang`（任意）。
    詳細は `python scripts/generate_bluesky_embed.py --help` を参照
-5. **末尾固定セクション** として `## プロジェクトの説明` を挿入する（言及リポの有無に関わらず常に挿入）。固定文言は `template-diary.md` の「末尾固定セクション」を参照
+5. **冒頭固定セクション** として「日記の説明 + プロジェクト説明リンク」を記事冒頭（タイトル直下）に挿入する（言及リポの有無に関わらず常に挿入）。固定文言は `template-diary.md` の「冒頭固定セクション」を参照
 
 ### Phase 5: ファイル出力（当該日 `d`）
 
