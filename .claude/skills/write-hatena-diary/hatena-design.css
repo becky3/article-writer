@@ -1,0 +1,125 @@
+/*
+ * write-hatena-diary 用デザイン CSS
+ *
+ * 配置: はてなブログ管理画面「デザイン → カスタマイズ → デザイン CSS」に貼り付ける。
+ *       スマホ版にも同じ内容を <style>...</style> で囲んで設定すること（スマホ版の設定欄は
+ *       CSS ではなく HTML として保存されるため、<style> ラップが必須）。
+ *
+ * 役割: 2 人のキャラクター対話形式の日記記事で使う吹き出し・キャラ紹介カードのスタイル。
+ *       本ファイルが SSoT。記事本文には <style> を書かず、HTML タグのみ書く。
+ *
+ * 本ファイルは運用環境向けの実値を含む（--char-X の URL ははてなフォトライフ等の
+ * 配信パスを直接埋め込む）。配布・再利用時は運用者が自身の画像ホスト URL に差し替える。
+ *
+ * キャラ画像の差し替え: 下記 :root の --char-A / --char-B / --char-C を変更するだけで全反映。
+ *   --char-A: 本文吹き出し（クロちゃん側、左）とキャラ紹介カード char-a で使用
+ *   --char-B: 本文吹き出し（幸田姉さん側、右）とキャラ紹介カード char-b で使用
+ *   --char-C: キャラ紹介カード char-c で使用。社長は本文の対話には登場しないが、
+ *             登場人物セクションには表示する（persona.md セクション 3 参照）
+ */
+
+:root {
+  --char-A: url("https://cdn-ak.f.st-hatena.com/images/fotolife/b/beckyJPN/20260515/20260515140140.png");
+  --char-B: url("https://cdn-ak.f.st-hatena.com/images/fotolife/b/beckyJPN/20260515/20260515140147.png");
+  --char-C: url("https://cdn-ak.f.st-hatena.com/images/fotolife/b/beckyJPN/20260515/20260515140135.png");
+}
+
+/* 吹き出し本体 */
+.balloon {
+  display: flex;
+  margin: 1.5em 0;
+  gap: 12px;
+  align-items: flex-start;
+}
+.balloon-r {
+  flex-direction: row-reverse;
+}
+.balloon .icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: #fff;
+  border: 1px solid #eee;
+  flex-shrink: 0;
+}
+.balloon-l .icon {
+  background-image: var(--char-A);
+}
+.balloon-r .icon {
+  background-image: var(--char-B);
+}
+.balloon .text {
+  position: relative;
+  max-width: 75%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 0.95em;
+  line-height: 1.6;
+}
+.balloon-l .text {
+  background: #e8f4ff;
+}
+.balloon-r .text {
+  background: #fff0e8;
+}
+.balloon-l .text::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: -8px;
+  border-style: solid;
+  border-width: 8px 8px 8px 0;
+  border-color: transparent #e8f4ff transparent transparent;
+}
+.balloon-r .text::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  right: -8px;
+  border-style: solid;
+  border-width: 8px 0 8px 8px;
+  border-color: transparent transparent transparent #fff0e8;
+}
+
+/* キャラ紹介カード */
+.characters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 1.5em 0;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 12px;
+}
+.char-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1 1 220px;
+  min-width: 220px;
+}
+.char-card .icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-color: #fff;
+  border: 1px solid #eee;
+  flex-shrink: 0;
+}
+.char-card.char-a .icon {
+  background-image: var(--char-A);
+}
+.char-card.char-b .icon {
+  background-image: var(--char-B);
+}
+.char-card.char-c .icon {
+  background-image: var(--char-C);
+}
+.char-card .desc {
+  font-size: 0.9em;
+  line-height: 1.5;
+}
