@@ -26,7 +26,7 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 - **`<日付>..<日付>`**: 範囲指定。範囲内のジャーナル存在日ごとに 1 記事ずつ生成（複数記事）。両端は独立に補完（`MM-DD` 形式は実行日の年で補完）
   - 例: `5-13` → 当年 5/13 の 1 記事、`2025-12-31..1-03` → 2025-12-31..2026-01-03 のジャーナル存在日ごとに記事
 
-## 処理手順 (Phase 1〜6 + 公開後処理)
+## 処理手順 (Phase 1〜6)
 
 範囲指定では Phase 3〜5 を **日付ごとに独立して繰り返す**。Phase 1（引数パース）で対象日リストを確定し、Phase 2（素材収集）で範囲一括取得 → 日付ごとに分類した後、ジャーナルが存在する各日について Phase 3〜5 をループ実行する。
 
@@ -141,18 +141,11 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 
    スキップ日があれば末尾に併記する（例: `（2026-05-11 はジャーナルなしでスキップ）`）
 
-## 公開後処理（別フロー、ユーザー指示時のみ）
+## 投稿（別スキル）
 
-ユーザーから「公開した」「Hatena に上げた」等の指示を受けたタイミングで実行する。
+本スキルは記事生成までを担う。はてなブログへの下書き登録は `/publish-hatena` スキル（`.claude/skills/publish-hatena/SKILL.md`）で行う。`/publish-hatena` が `articles/hatena/published.txt` への記録追記も担当する。
 
-1. 公開後の最終タイトルを確認（ユーザー指定または公開済み記事を直接参照）
-2. `articles/hatena/published.txt` に追記:
-   - 形式: `- (YYYY-MM-DD) タイトル: ソース参照`
-   - `YYYY-MM-DD` は公開日（日記対象日ではない点に注意）
-   - ソース参照は `journal:...` / `bluesky:...` を併記
-3. 既存記事のタイトルが公開時に変更されていた場合、対応する `published.txt` 行も合わせて更新する
-
-**MVP の前提**: 同日に複数記事を公開するケースは想定しない。`published.txt` の行特定は日付キーを使うため、同日複数記事が発生すると行特定が曖昧になる。複数日まとめての公開や同日複数記事公開が必要になった場合は別 Issue で対応する。
+**前提**: 1 日 1 記事。`published.txt` の重複検知は記事フロントマターの `date:`（日記対象日）を使う。複数日まとめて公開しても日記対象日で識別される。
 
 ## エラーハンドリング一覧
 
@@ -189,8 +182,7 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 
 ## NFR と将来拡張
 
-- **シークレット管理 (MVP 外)**: Phase C（はてなブログ AtomPub への自動投稿）は本 MVP に含めない。将来実装する際は ai-assistant / py-common-lib に倣い、`py_common_lib.get_secret(key, service="article-writer")` 経由で OS のセキュアストレージ（keyring）から取得する。環境変数フォールバックは行わない
-- **AtomPub 投稿時の Content-Type (MVP 外)**: Phase C で AtomPub に投稿する際は、XML 中の `<content>` 要素に `type="text/x-markdown"` を指定して Markdown を直接送信する。これにより、はてなブログのデフォルト編集モード設定にかかわらず Markdown 本文として登録できる
+- **AtomPub 自動投稿**: `/publish-hatena` で下書き登録のみサポート。公開投稿（`<app:draft>no</app:draft>`）は別 Issue で扱う
 - **Bluesky 投稿者フィルタ (MVP 外)**: 現時点では rag-knowledge 側にオーナーの投稿のみが取り込まれているためフィルタ不要。将来他者投稿の取り込みが始まったら、オーナー DID（または handle）でのフィルタを追加する（別 Issue で対応）
 
 ## 注意事項
