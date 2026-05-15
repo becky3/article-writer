@@ -11,10 +11,7 @@
 
 運用前提として、はてなブログ側のデフォルト編集モードを「Markdown」に設定しておく必要がある（「設定 → 基本設定 → 編集モード → Markdown」）。記事作成後に編集モードを変更できないため、本前提を満たさないと意図したフォーマットで表示されない。本前提はユーザー手動運用の範囲とし、スキルでは検知しない。
 
-**HTML タグ内では Markdown 構文が解釈されない**。
-`<div>` `<span>` 等のブロック内に書いた `` ` `` `*` `**` 等は文字列として表示される。
-リポ名・スキル名・コード断片など本来 `` ` `` で囲みたい箇所は、HTML タグ内では `<code>` タグを使う（例: `<div class="text">「<code>agent-commons</code> のルール改修をしてて」</div>`）。
-Markdown 構文が使えるのは HTML タグの外（通常の段落・H2/H3 見出し等）のみ。
+吹き出し・Bluesky 埋め込みの記法仕様は `balloon-html.md` を参照（簡素記法ブロック内のインラインコード扱い・本文に書ける要素・エラー条件等の詳細を記載）。
 
 なお、**生成記事 (`articles/hatena/**`) はリポジトリの markdownlint 対象外** としている（フロントマター + H1 重複 / HTML 埋め込み / 日本語段落の line-length 超過が頻発し、機械的 lint の便益が低いため）。
 
@@ -95,28 +92,24 @@ category: "diary"
 
 ## Bluesky 引用フォーマット
 
-Bluesky 投稿は、はてなブログ Markdown モードでもプレビュー時点で投稿カードとして表示されるよう、**`scripts/generate_bluesky_embed.py` で生成した HTML 埋め込みスニペット** を Markdown 本文に直接挿入する。
+Bluesky 投稿は `:::bluesky` 簡素記法で記事本文に直接書く。`/publish-hatena` 投稿時に `scripts/convert_article_html.py` が HTML 埋め込みカードに展開し、はてなブログ Markdown モードでもプレビュー時点で投稿カードとして表示される。
 
-スニペットの生成は SKILL.md Phase 4 で行う（投稿ごとに以下のコマンドを実行し、stdout の HTML を取得）:
+記法仕様（キー一覧・複数行 text の扱い・必須キー）は `balloon-html.md` の「Bluesky 記法」を SSoT として参照する。`articles/hatena/*.md` には簡素記法のまま保存し、HTML 展開済みのスニペットは書かない。
 
-```bash
-python scripts/generate_bluesky_embed.py \
-  --did <DID> \
-  --cid <CID> \
-  --rkey <rkey> \
-  --handle <handle> \
-  --display-name <表示名> \
-  --text "<投稿本文>" \
-  --created-at <ISO 8601> \
-  [--lang ja]
-```
-
-各投稿の HTML スニペットを記事本文に挿入し、その直後の段落にペルソナのコメントを書く:
+各投稿ブロックの直後にペルソナのコメントを書く:
 
 ```markdown
-{HTML スニペット（複数行）}
+:::bluesky
+did=...
+cid=...
+rkey=...
+handle=...
+display-name=...
+created-at=...
+text=投稿本文
+:::
 
 {ペルソナのコメント。エンタメ寄りトーン。1〜2 段落}
 ```
 
-引用は 1 投稿 = 1 スニペット。複数投稿があればスニペットとコメントを繰り返す。スニペット内に DID / handle / 投稿日時が含まれるため、本文中で別途これらを書き出す必要はない。
+引用は 1 投稿 = 1 ブロック。複数投稿があればブロックとコメントを繰り返す。ブロック内に DID / handle / 投稿日時が含まれるため、本文中で別途これらを書き出す必要はない。

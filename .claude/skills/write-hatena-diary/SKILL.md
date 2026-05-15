@@ -13,6 +13,9 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 書き手のペルソナは `.claude/skills/write-hatena-diary/persona.md` で定義され、本スキルから参照する。
 記事テンプレート（リポジトリマスターテーブル含む）は `.claude/skills/write-hatena-diary/template-diary.md` を SSoT とする。
 執筆品質ガイドラインは `.claude/skills/write-hatena-diary/quality-guidelines.md` を参照する（`/multi-perspective-review` のガイドライン準拠チェック観点もこのファイルを参照する）。
+吹き出し・Bluesky 埋め込みの簡素記法は `.claude/skills/write-hatena-diary/balloon-html.md` を参照。
+変換は `/publish-hatena` 投稿時に `scripts/convert_article_html.py` が行う。
+本スキルは簡素記法を `articles/hatena/*.md` に書き出すまでを担い、HTML 展開は行わない。
 
 仕様書: `aidlc-docs/inception/requirements/requirements.md`（要件）/ `aidlc-docs/construction/write-hatena-diary/functional-design/design.md`（機能設計）
 
@@ -75,7 +78,7 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 6. `JOURNAL_BY_DATE` の全ジャーナルを `rag_get_document(source_id=...)` で全文取得
 7. `rag_list_by_date_range(date_from=DATE_FROM, date_to=DATE_TO, source_type="bluesky", limit=100)` で Bluesky 投稿一覧を取得（**本ステップは必須実行**、全日 0 件でも続行）
 8. 結果を **対象日ごとに分類** し、`BLUESKY_BY_DATE = {date: [posts], ...}` を構築
-9. 各投稿について `rag_get_document(source_id=...)` で全文取得し、メタデータ（DID / CID / handle / display_name / rkey / created_at / 本文 / lang）を抽出する。Phase 4 で HTML 埋め込みスニペット生成スクリプトに渡す引数として保持
+9. 各投稿について `rag_get_document(source_id=...)` で全文取得し、メタデータ（DID / CID / handle / display_name / rkey / created_at / 本文 / lang）を抽出する。Phase 4 で `:::bluesky` 簡素記法ブロックの key=value 値として埋め込む
 
 ### Phase 2.5: ループ前準備（共通リソース読み込み）
 
@@ -97,13 +100,12 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 1. **本文の構成・口調・トーン・展開は `persona.md` を制御点として書き手の裁量に任せる**。固定セクション・必須サブセクションは設けない
 2. **タイトル** の文字列は `persona.md` の方針に従って決め、フロントマター `title:` と本文 H1 を一致させる
 3. **リポを言及する箇所では `name` を backtick 付きで本文に直接書く**（例: `` `rag-knowledge` ``、`` `article-writer` ``）。`becky3/<name>` 形式・`#<番号>` 形式（Issue / PR）は使わない
-4. **Bluesky 引用部** は `scripts/generate_bluesky_embed.py` で生成した HTML 埋め込みスニペットを Markdown 本文に直接挿入する。
-   雛形は `template-diary.md` 「Bluesky 引用フォーマット」を参照。
-   引用部の演出は `persona.md` セクション 3「社長の SNS（Bluesky）について」に従い、2 人だけが見つけた秘密のチャンネルとして会話に組み込む。
-   各投稿について Phase 2 で取得したメタデータを CLI 引数に渡して呼ぶ:
-   `--did` / `--cid` / `--rkey` / `--handle` / `--display-name` / `--text` / `--created-at` / `--lang`（任意）。
-   詳細は `python scripts/generate_bluesky_embed.py --help` を参照
-5. **冒頭固定セクション** として「日記の説明 + プロジェクト説明リンク」を記事冒頭（タイトル直下）に挿入する（言及リポの有無に関わらず常に挿入）。固定文言は `template-diary.md` の「冒頭固定セクション」を参照
+4. **吹き出し** は `:::l` / `:::r` の簡素記法で書く。記法仕様は `balloon-html.md` を参照。HTML タグ（`<div class="balloon">` 等）を直接書かない
+5. **Bluesky 引用部** は `:::bluesky` 簡素記法で書く。記法仕様は `balloon-html.md` 「Bluesky 記法」を参照。
+   Phase 2 で取得した各投稿のメタデータを key=value 形式で記述する（`did` / `cid` / `rkey` / `handle` / `display-name` / `created-at` / `text`、`lang` は任意）。
+   引用部の演出は `persona.md` セクション 3「社長の SNS（Bluesky）について」に従い、2 人だけが見つけた秘密のチャンネルとして会話に組み込む
+6. **簡素記法ブロックの自己チェック**: シーンを書き終えるたびに `balloon-html.md` 「書き手向けチェックリスト」を確認する（H2 直前の閉じ忘れ / 入れ子禁止 等）。記事全体を書き終えてからまとめてチェックすると修正箇所が散らばるため、シーン単位で確認する
+7. **冒頭固定セクション** として「日記の説明 + プロジェクト説明リンク」を記事冒頭（タイトル直下）に挿入する（言及リポの有無に関わらず常に挿入）。固定文言は `template-diary.md` の「冒頭固定セクション」を参照
 
 ### Phase 5: ファイル出力（当該日 `d`）
 
