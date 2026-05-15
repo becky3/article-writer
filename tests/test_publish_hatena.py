@@ -116,6 +116,84 @@ class StripLeadingH1Test(unittest.TestCase):
         self.assertEqual(result, body)
 
 
+class LoadEnvTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.env_path = pathlib.Path(self.tmpdir.name) / ".env"
+        self._orig = publish_hatena.ENV_FILE
+        publish_hatena.ENV_FILE = self.env_path
+        self.addCleanup(lambda: setattr(publish_hatena, "ENV_FILE", self._orig))
+
+    def test_inline_comment_stripped(self) -> None:
+        # 非クォート値は `#` 以降をコメントとして切り落とす
+        self.env_path.write_text(
+            "HATENA_ID=becky_example # owner's hatena id\n",
+            encoding="utf-8",
+        )
+        env = publish_hatena.load_env()
+        self.assertEqual(env["HATENA_ID"], "becky_example")
+
+    def test_quoted_value_preserves_hash(self) -> None:
+        # クォート内の `#` は値として保持される
+        self.env_path.write_text(
+            'HATENA_BLOG_ID="example.com#test"\n', encoding="utf-8"
+        )
+        env = publish_hatena.load_env()
+        self.assertEqual(env["HATENA_BLOG_ID"], "example.com#test")
+
+    def test_comment_only_line_skipped(self) -> None:
+        # 行頭 `#` のコメント行はスキップされる
+        self.env_path.write_text(
+            "# this is a comment\nHATENA_ID=alice\n", encoding="utf-8"
+        )
+        env = publish_hatena.load_env()
+        self.assertEqual(env["HATENA_ID"], "alice")
+        self.assertNotIn("# this is a comment", env)
+
+
+class SelectArticleTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.articles_dir = pathlib.Path(self.tmpdir.name) / "articles"
+        self.articles_dir.mkdir()
+        self._orig = publish_hatena.ARTICLES_DIR
+        publish_hatena.ARTICLES_DIR = self.articles_dir
+        self.addCleanup(
+            lambda: setattr(publish_hatena, "ARTICLES_DIR", self._orig)
+        )
+
+    def _touch(self, name: str) -> None:
+        (self.articles_dir / name).write_text("dummy\n", encoding="utf-8")
+
+    def test_non_dated_files_excluded(self) -> None:
+        # README.md 等の日付プレフィックスを持たないファイルは候補に含めない
+        self._touch("README.md")
+        self._touch("2026-05-13-09-00-00-foo.md")
+        result = publish_hatena.select_article(None)
+        self.assertEqual(result.name, "2026-05-13-09-00-00-foo.md")
+
+    def test_latest_by_filename(self) -> None:
+        # ファイル名昇順で最新を返す
+        self._touch("2026-05-12-08-00-00-old.md")
+        self._touch("2026-05-13-09-00-00-new.md")
+        result = publish_hatena.select_article(None)
+        self.assertEqual(result.name, "2026-05-13-09-00-00-new.md")
+
+    def test_date_prefix_filter(self) -> None:
+        # date 指定時は前方一致で絞り込む
+        self._touch("2026-05-12-08-00-00-old.md")
+        self._touch("2026-05-13-09-00-00-new.md")
+        result = publish_hatena.select_article("2026-05-12")
+        self.assertEqual(result.name, "2026-05-12-08-00-00-old.md")
+
+    def test_no_articles_raises(self) -> None:
+        self._touch("README.md")  # 日付プレフィックスなしのみ
+        with self.assertRaises(SystemExit):
+            publish_hatena.select_article(None)
+
+
 class CheckDuplicateTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmpdir = tempfile.TemporaryDirectory()

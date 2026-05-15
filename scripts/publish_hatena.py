@@ -42,6 +42,13 @@ PUBLISHED_TXT = ARTICLES_DIR / "published.txt"
 
 
 def load_env() -> dict[str, str]:
+    """`.env` を読み込んで dict として返す.
+
+    `KEY=value` 形式の各行をパースする。クォート文字列（`"..."` または `'...'`）の
+    場合はクォート内をそのまま値とする。非クォート値は `#` 以降を行末コメントとして
+    切り落とす（例: `KEY=value # コメント` → 値は `value`）。
+    値内に `#` を含めたい場合はクォートで囲む。
+    """
     if not ENV_FILE.exists():
         msg = (
             f".env が見つかりません: {ENV_FILE}\n"
@@ -57,8 +64,15 @@ def load_env() -> dict[str, str]:
             continue
         if "=" not in stripped:
             continue
-        key, value = stripped.split("=", 1)
-        result[key.strip()] = value.strip().strip('"').strip("'")
+        key, raw = stripped.split("=", 1)
+        raw = raw.strip()
+        if len(raw) >= 2 and raw[0] in ('"', "'") and raw[-1] == raw[0]:
+            value = raw[1:-1]
+        elif "#" in raw:
+            value = raw.split("#", 1)[0].rstrip()
+        else:
+            value = raw
+        result[key.strip()] = value
     return result
 
 
@@ -82,18 +96,27 @@ def get_secret(key: str) -> str:
     return value
 
 
+_ARTICLE_NAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-")
+
+
 def select_article(date: str | None) -> pathlib.Path:
     """対象記事を選ぶ. date 指定時は前方一致、未指定時はファイル名順で最新.
 
-    ファイル名は `YYYY-MM-DD-HHMMSS-<slug>.md` 形式（write-hatena-diary 仕様）のため、
+    ファイル名は `YYYY-MM-DD-HH-MM-SS-<slug>.md` 形式（write-hatena-diary 仕様）のため、
     辞書順ソートで時系列順になる。mtime ではなくファイル名でソートするのは、
     `touch` 等で mtime が書き換わっても選択結果が安定するため。
+
+    日付プレフィックスを持たない補助ファイル（README.md 等）は候補から除外する。
     """
     if not ARTICLES_DIR.exists():
         raise SystemExit(f"記事ディレクトリが存在しません: {ARTICLES_DIR}")
-    candidates = sorted(ARTICLES_DIR.glob("*.md"))
+    candidates = sorted(
+        p for p in ARTICLES_DIR.glob("*.md") if _ARTICLE_NAME_RE.match(p.name)
+    )
     if not candidates:
-        raise SystemExit(f"対象記事がありません: {ARTICLES_DIR}/*.md")
+        raise SystemExit(
+            f"対象記事がありません: {ARTICLES_DIR}/YYYY-MM-DD-HH-MM-SS-*.md"
+        )
     if date:
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
             raise SystemExit(f"日付形式が不正です（YYYY-MM-DD で指定）: '{date}'")
@@ -344,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     edit_url = extract_edit_url(response)
     print("✅ 下書き登録成功")
     print(f"  記事: {article_path.relative_to(REPO_ROOT)}")
-    print(f"  Entry ID: {entry_id}")
+    print(f"  Entry ID: {entry_id if entry_id else '(取得失敗・管理画面で確認)'}")
     if edit_url:
         print(f"  URL: {edit_url}")
 

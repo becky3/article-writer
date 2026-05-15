@@ -8,7 +8,7 @@
 - 記事生成スキル: `/write-zenn`（Zenn 形式）/ `/write-hatena-diary`（はてなブログ向け日記）
 - 記事投稿スキル: `/publish-hatena`（はてなブログ AtomPub で下書き登録）
 - 記事レビュースキル: `/multi-perspective-review`（観点別エージェント並列レビュー、生成後の品質確認用）
-- 生成記事は `articles/{platform}/{YYYYMMDD-HHMMSS}-{article-slug}.md`（git 管理下）に出力
+- 生成記事は `articles/{platform}/{YYYY-MM-DD-HH-MM-SS}-{article-slug}.md`（git 管理下）に出力
 - 素材源として参照する対象リポジトリは `.claude/sources.yml` で管理。ローカルパス解決には環境変数 `LOCAL_REPOS_ROOT` を使用
 
 ## Git 運用
