@@ -46,7 +46,11 @@ category: "diary"
 ---
 ```
 
-`title` / `date` / `category` の 3 項目のみ。MVP では Phase C（AtomPub 自動投稿）を実装しないため、フロントマターは記事ファイル内に保持するのみで投稿には使われない。Phase C 実装時にフロントマター値を投稿リクエストに利用する想定。
+`title` / `date` / `category` の 3 項目のみ。`/publish-hatena` での下書き登録時に、これらの値が以下のように反映される:
+
+- `title` → AtomPub Entry の `<title>`
+- `date` → AtomPub Entry の `<updated>`（JST 0 時として ISO 8601 化、はてなブログ管理画面の公開予定日として表示）および `published.txt` 記録用の日付キー
+- `category` → AtomPub Entry の `<category term="...">`
 
 ---
 
