@@ -4,7 +4,7 @@
 
 対象記法:
 
-- ``:::l`` / ``:::r`` … 吹き出し（balloon-l / balloon-r）
+- ``:::kuro-chan`` / ``:::nee-san`` … 吹き出し（balloon-l / balloon-r）
 - ``:::bluesky`` … Bluesky 投稿の埋め込みカード
 
 使用例:
@@ -25,10 +25,17 @@ import pathlib
 import re
 import sys
 
-BALLOON_OPEN_RE = re.compile(r"^:::(l|r)\s*$")
+BALLOON_OPEN_RE = re.compile(r"^:::(kuro-chan|nee-san)\s*$")
 BLUESKY_OPEN_RE = re.compile(r"^:::bluesky\s*$")
 FENCE_CLOSE_RE = re.compile(r"^:::\s*$")
 ANY_OPEN_RE = re.compile(r"^:::[A-Za-z]")
+
+# キャラ名 → CSS 側 (l/r) のマッピング。CSS クラス名 balloon-l / balloon-r は変えず、
+# 入力記法だけキャラ名直結にする方針（マーカーがキャラ取り違えを誘発しないため）。
+BALLOON_NAME_TO_SIDE = {
+    "kuro-chan": "l",
+    "nee-san": "r",
+}
 # balloon 本文内の Markdown 風インラインコード（`...`）を <code>...</code> に
 # 自動置換するための正規表現。
 # balloon は HTML の <div> 内に展開され Markdown が効かないため、書き手の
@@ -163,7 +170,8 @@ def convert(text: str) -> str:
         balloon_match = BALLOON_OPEN_RE.match(line)
         bluesky_match = BLUESKY_OPEN_RE.match(line)
         if balloon_match:
-            side = balloon_match.group(1)
+            name = balloon_match.group(1)
+            side = BALLOON_NAME_TO_SIDE[name]
             block_start = i + 1
             body_lines: list[str] = []
             j = i + 1
@@ -177,7 +185,7 @@ def convert(text: str) -> str:
                 j += 1
             if j >= n:
                 raise ConvertError(
-                    f"行 {block_start}: :::{side} ブロックが閉じられていません",
+                    f"行 {block_start}: :::{name} ブロックが閉じられていません",
                 )
             out.append(build_balloon(side, "\n".join(body_lines)))
             i = j + 1

@@ -58,7 +58,7 @@ category: "diary"
 
 ## 記事の機械的出版要件
 
-本セクションは記事生成時の **機械的に守るべき要件のみ** を定める。本文の構成・口調・トーン・セクション分けは `persona.md` を制御点として、書き手の裁量に任せる。
+本セクションは記事生成時の **機械的に守るべき要件のみ** を定める。本文の構成・口調・セクション分けは `quality-guidelines.md` Part 1（物語世界）を制御点として、書き手の裁量に任せる。
 
 ### タイトル
 
@@ -71,12 +71,58 @@ category: "diary"
 
 ### リポジトリ言及
 
-本文中でリポジトリに言及する場合は、`name` を backtick 付きで直接書く（例: `` `rag-knowledge` `` 、 `` `article-writer` `` ）。
-`becky3/<name>` 形式・GitHub URL・Issue / PR 番号は本文に書かない（個別説明は冒頭固定セクションの外部記事に集約済）。
+- 本文中でリポジトリに言及する場合は、`name` を backtick 付きで直接書く
+- `becky3/<name>` 形式・GitHub URL・Issue / PR 番号は本文に書かない
+- リポの個別説明は記事内に書かない（プロジェクトの説明セクションの外部記事に集約済）
 
-### 冒頭固定セクション
+### 冒頭セクションの順序
 
-記事冒頭（タイトル直下のリード文）で以下を **固定文言で常に挿入する**（言及リポの有無に関わらず）:
+- 記事冒頭は以下の順で固定挿入する（言及リポの有無に関わらず常に挿入）
+  1. `## 登場人物` — 登場人物セクション（3 カードの固定 HTML）
+  2. `## プロジェクトの説明` — プロジェクト説明への外部リンク
+- 続いて本文最初の H2 シーンへ繋げる
+
+### 登場人物セクション
+
+- 配置: タイトル H1 の直下（最初の H2 セクション）
+- 言及リポ・対話シーン数に関わらず常に挿入する
+- 3 カード（クロちゃん／幸田姉さん／社長）を `hatena-design.css` の `.characters` / `.char-card.char-a/b/c` クラスで並べる
+- 構造は固定 HTML 文言とし、書き手は改変しない
+
+#### 固定 HTML（このまま記事に貼る）
+
+事実情報（名前・属性・特徴）は **完全固定文言**。当日のテーマに合わせた一言部分だけ `{{char-A-line}}` / `{{char-B-line}}` / `{{char-C-line}}` のマーカーを置換する:
+
+```markdown
+## 登場人物
+
+<div class="characters">
+<div class="char-card char-a">
+<div class="icon"></div>
+<div class="desc"><strong>クロちゃん</strong>（新人・24 歳）<br>確認過多の慎重派。期待には応えたいけど自信は薄め。<br>{{char-A-line}}</div>
+</div>
+<div class="char-card char-b">
+<div class="icon"></div>
+<div class="desc"><strong>幸田姉さん</strong>（先輩・40 歳）<br>達観して見える相棒タイプ。クロちゃんの先輩。<br>{{char-B-line}}</div>
+</div>
+<div class="char-card char-c">
+<div class="icon"></div>
+<div class="desc"><strong>社長</strong><br>うちの会社の社長。日々のぼやきの種だが、SNS をこっそり覗くと素顔が出ている。<br>{{char-C-line}}</div>
+</div>
+</div>
+```
+
+#### マーカーの置換ルール
+
+- `{{char-A-line}}` / `{{char-B-line}}` / `{{char-C-line}}` の 3 マーカーは **必ずすべて置換する**（マーカーが記事に残るのは禁止）
+- 一言の方針（字数・トーン・書き方）は `quality-guidelines.md` Part 1「登場人物」「登場人物セクションの一言」を SSoT として参照する
+- 事実情報部分（`<strong>名前</strong>` 〜 `<br>` 直前まで）は **書き手が改変しない**。ぶれ防止のため固定文言で運用する
+
+### プロジェクトの説明セクション
+
+- 配置: 「登場人物セクション」の直下
+- 言及リポの有無に関わらず常に挿入する
+- 以下の固定文言で挿入する:
 
 ```markdown
 ## プロジェクトの説明
@@ -92,11 +138,15 @@ category: "diary"
 
 ## Bluesky 引用フォーマット
 
-Bluesky 投稿は `:::bluesky` 簡素記法で記事本文に直接書く。`/publish-hatena` 投稿時に `scripts/convert_article_html.py` が HTML 埋め込みカードに展開し、はてなブログ Markdown モードでもプレビュー時点で投稿カードとして表示される。
+- Bluesky 投稿は `:::bluesky` 簡素記法で記事本文に直接書く
+- 変換は `/publish-hatena` 投稿時に `scripts/convert_article_html.py` が実施（HTML 埋め込みカードに展開）
+- 記法仕様（キー一覧・複数行 text の扱い・必須キー）は `balloon-html.md` の「Bluesky 記法」を SSoT として参照する
+- `articles/hatena/*.md` には簡素記法のまま保存し、HTML 展開済みのスニペットは書かない
+- 1 投稿 = 1 ブロック。複数投稿があればブロックを繰り返す
+- 各投稿ブロックの直後にペルソナのコメントを書く（コメントの内容・トーンは `quality-guidelines.md` Part 1「登場人物」を参照）
+- ブロック内に DID / handle / 投稿日時が含まれるため、本文中で別途これらを書き出す必要はない
 
-記法仕様（キー一覧・複数行 text の扱い・必須キー）は `balloon-html.md` の「Bluesky 記法」を SSoT として参照する。`articles/hatena/*.md` には簡素記法のまま保存し、HTML 展開済みのスニペットは書かない。
-
-各投稿ブロックの直後にペルソナのコメントを書く:
+書式例:
 
 ```markdown
 :::bluesky
@@ -109,7 +159,5 @@ created-at=...
 text=投稿本文
 :::
 
-{ペルソナのコメント。エンタメ寄りトーン。1〜2 段落}
+{ペルソナのコメント}
 ```
-
-引用は 1 投稿 = 1 ブロック。複数投稿があればブロックとコメントを繰り返す。ブロック内に DID / handle / 投稿日時が含まれるため、本文中で別途これらを書き出す必要はない。

@@ -20,7 +20,7 @@ import convert_article_html  # noqa: E402
 
 class BalloonConvertTest(unittest.TestCase):
     def test_left_balloon_basic(self) -> None:
-        src = ":::l\nぼく、ちょっと相談があるんですが。\n:::\n"
+        src = ":::kuro-chan\nぼく、ちょっと相談があるんですが。\n:::\n"
         out = convert_article_html.convert(src)
         self.assertIn(
             '<div class="balloon balloon-l"><div class="icon"></div>'
@@ -29,7 +29,7 @@ class BalloonConvertTest(unittest.TestCase):
         )
 
     def test_right_balloon_basic(self) -> None:
-        src = ":::r\nあら、どうしたの。\n:::\n"
+        src = ":::nee-san\nあら、どうしたの。\n:::\n"
         out = convert_article_html.convert(src)
         self.assertIn(
             '<div class="balloon balloon-r"><div class="icon"></div>'
@@ -38,7 +38,7 @@ class BalloonConvertTest(unittest.TestCase):
         )
 
     def test_balloon_multiline_body_is_joined_with_space(self) -> None:
-        src = ":::l\n1 行目\n2 行目\n3 行目\n:::\n"
+        src = ":::kuro-chan\n1 行目\n2 行目\n3 行目\n:::\n"
         out = convert_article_html.convert(src)
         self.assertIn(
             '<div class="text">1 行目 2 行目 3 行目</div>',
@@ -46,7 +46,7 @@ class BalloonConvertTest(unittest.TestCase):
         )
 
     def test_balloon_inline_html_passes_through(self) -> None:
-        src = ":::l\n<code>agent-commons</code> のルール改修をしてて\n:::\n"
+        src = ":::kuro-chan\n<code>agent-commons</code> のルール改修をしてて\n:::\n"
         out = convert_article_html.convert(src)
         # body は HTML 直書きとして扱うため、エスケープされずに残る
         self.assertIn(
@@ -55,7 +55,7 @@ class BalloonConvertTest(unittest.TestCase):
         )
 
     def test_balloon_sequence_lr(self) -> None:
-        src = ":::l\nA\n:::\n:::r\nB\n:::\n"
+        src = ":::kuro-chan\nA\n:::\n:::nee-san\nB\n:::\n"
         out = convert_article_html.convert(src)
         self.assertIn('class="balloon balloon-l"', out)
         self.assertIn('class="balloon balloon-r"', out)
@@ -63,7 +63,7 @@ class BalloonConvertTest(unittest.TestCase):
         self.assertIn(">B<", out)
 
     def test_non_balloon_lines_pass_through(self) -> None:
-        src = "## 見出し\n\n通常段落です。\n\n:::l\nセリフ\n:::\n\n別の段落。\n"
+        src = "## 見出し\n\n通常段落です。\n\n:::kuro-chan\nセリフ\n:::\n\n別の段落。\n"
         out = convert_article_html.convert(src)
         self.assertIn("## 見出し", out)
         self.assertIn("通常段落です。", out)
@@ -71,19 +71,19 @@ class BalloonConvertTest(unittest.TestCase):
         self.assertIn('class="balloon balloon-l"', out)
 
     def test_unclosed_balloon_raises(self) -> None:
-        src = ":::l\nセリフ\n本文最後まで閉じない\n"
+        src = ":::kuro-chan\nセリフ\n本文最後まで閉じない\n"
         with self.assertRaises(convert_article_html.ConvertError):
             convert_article_html.convert(src)
 
     def test_nested_balloon_raises(self) -> None:
-        src = ":::l\nセリフ\n:::r\n入れ子\n:::\n:::\n"
+        src = ":::kuro-chan\nセリフ\n:::nee-san\n入れ子\n:::\n:::\n"
         with self.assertRaises(convert_article_html.ConvertError):
             convert_article_html.convert(src)
 
     def test_balloon_inline_backtick_is_auto_converted_to_code(self) -> None:
         # balloon 内で `name` を使うと変換時に <code>name</code> に自動置換される。
         # 書き手は balloon の内外を問わず通常の backtick で書ける。
-        src = ":::l\n`agent-commons` のルール改修をしてて\n:::\n"
+        src = ":::kuro-chan\n`agent-commons` のルール改修をしてて\n:::\n"
         out = convert_article_html.convert(src)
         self.assertIn(
             '<div class="text"><code>agent-commons</code> のルール改修をしてて</div>',
@@ -97,7 +97,7 @@ class BalloonConvertTest(unittest.TestCase):
 
     def test_balloon_multiple_inline_backticks_all_converted(self) -> None:
         # 1 つのバルーン内に複数の backtick がある場合、すべて <code> 化される。
-        src = ":::l\n`agent-commons` で `invariants.md` を直しました\n:::\n"
+        src = ":::kuro-chan\n`agent-commons` で `invariants.md` を直しました\n:::\n"
         out = convert_article_html.convert(src)
         self.assertIn(
             '<code>agent-commons</code> で <code>invariants.md</code>',
@@ -106,7 +106,7 @@ class BalloonConvertTest(unittest.TestCase):
 
     def test_balloon_code_tag_is_allowed(self) -> None:
         # <code> タグ直書きも引き続きサポート（HTML 直書きの性質を保つ）。
-        src = ":::l\n<code>agent-commons</code> のルール改修をしてて\n:::\n"
+        src = ":::kuro-chan\n<code>agent-commons</code> のルール改修をしてて\n:::\n"
         out = convert_article_html.convert(src)
         self.assertIn(
             '<div class="text"><code>agent-commons</code> のルール改修をしてて</div>',
@@ -253,7 +253,7 @@ class BlueskyConvertTest(unittest.TestCase):
 class MixedConvertTest(unittest.TestCase):
     def test_balloon_and_bluesky_coexist(self) -> None:
         src = (
-            ":::l\nセリフ\n:::\n"
+            ":::kuro-chan\nセリフ\n:::\n"
             "\n"
             ":::bluesky\n"
             "did=did:plc:a\n"
@@ -265,7 +265,7 @@ class MixedConvertTest(unittest.TestCase):
             "text=t\n"
             ":::\n"
             "\n"
-            ":::r\nおっけー\n:::\n"
+            ":::nee-san\nおっけー\n:::\n"
         )
         out = convert_article_html.convert(src)
         self.assertIn('class="balloon balloon-l"', out)
