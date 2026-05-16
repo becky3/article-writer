@@ -2,7 +2,7 @@
 name: write-hatena-diary
 description: はてなブログ向けの日記記事を、指定日範囲のジャーナルと Bluesky 投稿を素材に生成する
 user-invocable: true
-allowed-tools: Bash, Read, Edit, Write, Grep, Glob, mcp__rag-knowledge-production__rag_list_by_date_range, mcp__rag-knowledge-production__rag_get_document
+allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Skill, mcp__rag-knowledge-production__rag_list_by_date_range, mcp__rag-knowledge-production__rag_get_document
 argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 ---
 
@@ -10,7 +10,7 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 
 指定日のジャーナル（必須）と Bluesky 投稿（補足）を素材に、はてなブログ向けの日記 Markdown を生成する。
 **1 日 = 1 記事** が単位。範囲指定の場合は範囲内でジャーナルが存在する各日について独立した記事を 1 つずつ生成する（1 記事に複数日をまとめない）。
-執筆ガイド（書き手ペルソナ + 品質ルール）は `.claude/skills/write-hatena-diary/quality-guidelines.md` を最上位 SSoT として参照する（Part 1 が物語世界、Part 2 が品質ルール。`/multi-perspective-review` のガイドライン準拠チェック観点も同ファイルの Part 2 を参照する）。
+執筆ガイド（書き手ペルソナ + 品質ルール）は `.claude/skills/write-hatena-diary/quality-guidelines.md` を最上位 SSoT として参照する（Part 1 が物語世界、Part 2 が品質ルール。`/review-hatena-diary` の 3 観点もこのファイルを機械照合する）。
 記事テンプレート（リポジトリマスターテーブル含む）は `.claude/skills/write-hatena-diary/template-diary.md` を SSoT とする。
 吹き出し・Bluesky 埋め込みの簡素記法は `.claude/skills/write-hatena-diary/balloon-html.md` を参照。
 変換は `/publish-hatena` 投稿時に `scripts/convert_article_html.py` が行う。
@@ -30,7 +30,9 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 
 ## 処理手順 (Phase 1〜6)
 
-範囲指定では Phase 3〜5 を **日付ごとに独立して繰り返す**。Phase 1（引数パース）で対象日リストを確定し、Phase 2（素材収集）で範囲一括取得 → 日付ごとに分類した後、ジャーナルが存在する各日について Phase 3〜5 をループ実行する。
+範囲指定では Phase 3〜5.5 を **日付ごとに独立して繰り返す**。Phase 1（引数パース）で対象日リストを確定し、Phase 2（素材収集）で範囲一括取得 → 日付ごとに分類した後、ジャーナルが存在する各日について Phase 3〜5.5 をループ実行する。
+
+記事生成（Phase 5）直後に自動レビュー（Phase 5.5）が走り、レビュー結果は `/review-hatena-diary` 内で triage 連携・修正適用まで完結する。
 
 ### Phase 1: 引数パース
 
@@ -77,15 +79,30 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 6. `JOURNAL_BY_DATE` の全ジャーナルを `rag_get_document(source_id=...)` で全文取得
 7. `rag_list_by_date_range(date_from=DATE_FROM, date_to=DATE_TO, source_type="bluesky", limit=100)` で Bluesky 投稿一覧を取得（**本ステップは必須実行**、全日 0 件でも続行）
 8. 結果を **対象日ごとに分類** し、`BLUESKY_BY_DATE = {date: [posts], ...}` を構築
-9. 各投稿について `rag_get_document(source_id=...)` で全文取得し、メタデータ（DID / CID / handle / display_name / rkey / created_at / 本文 / lang）を抽出する。Phase 4 で `:::bluesky` 簡素記法ブロックの key=value 値として埋め込む
+9. 各投稿について `rag_get_document(source_id=..., format="original")` で投稿 JSON 全体を取得する。
+
+    **`format="original"` 指定必須**（デフォルトの `format="text"` では本文以外のメタデータが失われ、`cid` 等が取得できない）。
+
+    取得した JSON から以下のフィールドを抽出して Phase 4 で `:::bluesky` 簡素記法ブロックの key=value 値として埋め込む:
+
+    | キー | JSON パス |
+    |---|---|
+    | `did` | `post.author.did` |
+    | `cid` | `post.cid` |
+    | `rkey` | `post.uri` の末尾（`at://<did>/app.bsky.feed.post/<rkey>` の `<rkey>` 部分） |
+    | `handle` | `post.author.handle` |
+    | `display-name` | `post.author.displayName` |
+    | `created-at` | `post.record.createdAt` |
+    | `text` | `post.record.text` |
+    | `lang` | `post.record.langs[0]`（任意。省略時は `:::bluesky` 側のデフォルト `ja` が適用される） |
 
 ### Phase 2.5: ループ前準備（共通リソース読み込み）
 
-`quality-guidelines.md` と `template-diary.md` を Read する（**Phase 3〜5 のループ全体で 1 回のみ実行**。各日のループ内で再読込しない）。読み込んだ内容は Phase 4（執筆ガイド + テンプレート参照）で共通利用する。
+`quality-guidelines.md` と `template-diary.md` を Read する（**Phase 3〜5.5 のループ全体で 1 回のみ実行**。各日のループ内で再読込しない）。読み込んだ内容は Phase 4（執筆ガイド + テンプレート参照）で共通利用する。
 
 ---
 
-**以後の Phase 3〜5 は `JOURNAL_DATES` を順に走査し、各日 `d` について独立に実行する。**
+**以後の Phase 3〜5.5 は `JOURNAL_DATES` を順に走査し、各日 `d` について独立に実行する。**
 
 ### Phase 3: Bluesky 選別（当該日 `d`）
 
@@ -108,11 +125,6 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 7. **セクション配置の順序**: タイトル H1 の直下に **登場人物セクション** を置き、続いて本文の H2 シーン、記事末尾に **プロジェクトの説明セクション** を置く。順序の SSoT は `template-diary.md` 「セクション配置の順序」を参照
 8. **登場人物セクション** をタイトル H1 直下に挿入する（言及リポ・対話シーン数に関わらず常に挿入）。固定 HTML 文言と置換ルールの SSoT は `template-diary.md` 「登場人物セクション」（マーカー全置換義務・字数・改変禁止範囲を含む）。置換内容の方針は `quality-guidelines.md` Part 1「登場人物セクションの一言」を参照
 9. **プロジェクトの説明セクション** を記事末尾に挿入する（言及リポの有無に関わらず常に挿入）。セクション構造とテンプレートは `template-diary.md` 「プロジェクトの説明セクション」を参照（テーブル本体は話に関連する分に絞って差し替える）
-10. **執筆品質の自己チェック**: 記事全体を書き終えたら、以下のフローで自己チェックする。観点別の列挙ではなく、関連ドキュメントを **改めて Read してから** 記事を読み直して問題点を洗い出す方式に統一する
-    1. `quality-guidelines.md` を Read で読み直す（Part 1 / Part 2 を通読）
-    2. 生成した記事 markdown を Read で読み直す
-    3. ガイドの各項目と記事本文を逐次照合し、違反・乖離・違和感のある箇所を洗い出す
-    4. 検出した問題点を Edit で修正する（マーカー残存・キャラ口調・カッコ書き・内部実装語頻度・登場人物セクションの一言整合 等、すべて対象）
 
 ### Phase 5: ファイル出力（当該日 `d`）
 
@@ -123,6 +135,20 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 3. ディレクトリが存在しなければ作成
 4. **新規作成のため Write を使用**。最初から最終稿の場所で編集する（中間ドラフトを別ディレクトリに置かない）
 5. 生成済みパスを `GENERATED_PATHS` リストに追加
+
+### Phase 5.5: レビュー自動呼び出し（当該日 `d`）
+
+Phase 5 で当該日の記事を Write した直後、本ステップで `/review-hatena-diary` を自動呼び出しする。各記事のループ内で実行することで、生成 → review → triage → 修正 をコンテキストが新鮮なうちに完結させる。
+
+1. `Skill` ツールで `/review-hatena-diary <Phase 5 で Write したパス>` を起動する
+2. `/review-hatena-diary` 内で 3 観点並列レビュー → 指摘の triage 連携 → ユーザー確認 → 確定した修正を対象記事ファイルへ適用する処理が完結する（本スキル側で追加の triage や修正適用は行わない）
+3. `/review-hatena-diary` が正常完了したら次の日のループ（Phase 3）へ進む
+
+エラー時の挙動:
+
+- `/review-hatena-diary` が正常終了しなかった場合（起動自体の失敗・内部停止・全サブエージェント失敗等を含む）は、警告を表示してその日のループを完了扱いとし、次の日のループに進む。生成済み記事は `GENERATED_PATHS` に残る
+- **単一日指定モード**（`MODE=single` / `MODE=today`）で「次の日」が存在しない場合はそのまま Phase 6（後処理）へ進む
+- `/review-hatena-diary` 内のサブエージェント部分失敗・triage 中断・修正適用失敗は `/review-hatena-diary` 側で処理され、本ステップにはエラーとして伝播しない（部分的な review 結果として完了扱い）
 
 ---
 
@@ -166,7 +192,8 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 | 範囲内の全日でジャーナル 0 件 | エラー表示 + 停止（日記成立条件不足） |
 | 範囲内の一部の日でジャーナル 0 件 | 警告表示 + その日をスキップして続行 |
 | 特定日で Bluesky 検索結果 0 件 | Phase 3 をスキップ + 当該記事の Bluesky セクションを省略して続行 |
-| Phase 3〜5 ループ中に MCP タイムアウト・致命エラーで全体中断 | それまでに Write 済みのパスを `GENERATED_PATHS` に残し、Phase 6（エディタオープン・完了メッセージ）を残存分に対して実行する。完了メッセージで中断した旨を併記 |
+| Phase 3〜5.5 ループ中に MCP タイムアウト・致命エラーで全体中断 | それまでに Write 済みのパスを `GENERATED_PATHS` に残し、Phase 6（エディタオープン・完了メッセージ）を残存分に対して実行する。完了メッセージで中断した旨を併記 |
+| Phase 5.5 で `/review-hatena-diary` が正常終了しなかった | 警告表示 + その日のループを完了扱いとし、次の日のループに進む（起動失敗・内部停止・全サブエージェント失敗を含む）。単一日指定モードで「次の日」が存在しない場合は Phase 6 へ進む |
 | `code` PATH 不通 | サイレントスキップ |
 
 ## ソース参照形式
@@ -195,7 +222,6 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 
 ## 注意事項
 
-- 生成された記事は必ずレビューしてから公開する
-- 観点別並列レビューが必要な場合は `/multi-perspective-review <記事ファイルパス>` の実行を推奨する（自動呼び出しはせず、ユーザー判断で起動）。`articles/hatena/` 配下の記事を渡せば、本スキル用の `quality-guidelines.md` を参照して 5 観点フルレビューが走る
+- 生成された記事は Phase 5.5 で `/review-hatena-diary` による自動レビュー（3 観点並列 + triage + 修正適用）を経た上で出力される
 - ペルソナ調整提案は記事生成中に行ってよいが、適用前にオーナー確認を取る（`quality-guidelines.md` 「ペルソナ調整に関する自己制御」参照）
-- 著作物・IP 情報の混入を避ける（`quality-guidelines.md` 「著作物・IP 情報の混入防止」参照）
+- 著作物・IP 情報の混入を避ける（`quality-guidelines.md` 「著作物・IP 情報の混入防止」参照。`/review-hatena-diary` 観点 2「ガイドライン準拠」でも検出する）
