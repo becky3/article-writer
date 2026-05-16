@@ -205,10 +205,15 @@ class BalloonConvertTest(unittest.TestCase):
 
     def test_balloon_decoration_inner_whitespace_not_matched(self) -> None:
         # 内側が空白で始まる/終わる `* foo*` / `*foo *` は装飾としてマッチしない。
-        src = ":::kuro-chan\n`* foo*` と `*foo *` は装飾にならない\n:::\n"
+        # backtick で囲うと code 退避で装飾対象外になり検証にならないため、
+        # 装飾文字を地の文に直接書く形でアサートする。
+        src = ":::kuro-chan\nleft * foo* と right *foo * は装飾にならない\n:::\n"
         out = convert_article_html.convert(src)
-        self.assertNotIn("<em> foo</em>", out)
-        self.assertNotIn("<em>foo </em>", out)
+        self.assertNotIn("<em>", out)
+        self.assertIn(
+            '<div class="text">left * foo* と right *foo * は装飾にならない</div>',
+            out,
+        )
 
     def test_balloon_single_char_decoration_matches(self) -> None:
         # 1 文字の装飾（`*a*` `**b**` `~~c~~`）は内側が非空白 1 文字としてマッチする。
@@ -217,6 +222,23 @@ class BalloonConvertTest(unittest.TestCase):
         self.assertIn("<em>a</em>", out)
         self.assertIn("<strong>b</strong>", out)
         self.assertIn("<del>c</del>", out)
+
+    def test_balloon_bolditalic_triple_asterisk_is_converted(self) -> None:
+        # ***foo*** が <strong><em>foo</em></strong> に変換される（タグ順序が正しい）。
+        src = ":::kuro-chan\n***超重要*** な指摘\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn(
+            '<div class="text"><strong><em>超重要</em></strong> な指摘</div>',
+            out,
+        )
+
+    def test_balloon_bolditalic_takes_priority_over_bold_and_italic(self) -> None:
+        # ***foo*** は bold/italic 単独正規表現より先にマッチし、
+        # `<strong><em>...</strong></em>` のような閉じタグ順序の壊れた出力にならない。
+        src = ":::kuro-chan\n***A***\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertNotIn("<strong><em>A</strong></em>", out)
+        self.assertIn("<strong><em>A</em></strong>", out)
 
 
 class BlueskyConvertTest(unittest.TestCase):

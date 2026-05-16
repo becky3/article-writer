@@ -43,13 +43,11 @@ BALLOON_NAME_TO_SIDE = {
 # 書き手は balloon の内外を問わず `...` で書ける（balloon の外は Markdown が
 # 効くため backtick がそのまま <code> 体になり、内側は本関数で置換される）。
 BALLOON_INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
-# balloon 本文内の Markdown 風文字装飾を対応 HTML タグに自動置換するための正規表現。
-# 内側の最初と最後が非空白であることを要求する（`\S(?:[^...\n]*?\S)?` パターン）。
-# これにより、地の文の単独 `*` `**` `~~`（例: `2 * 3 = 6`・`2 ** 3` 等）が誤発火
-# しない。CommonMark の強調記号の境界条件に近い挙動。
-# 適用順序は bold → italic（bold を先に処理しないと `**foo**` が `*foo*` の
-# italic として誤マッチする）。strike は文字種が完全に分かれている（`~`）ため
-# 順序は他 2 つと独立で、bold と italic の間に置く。
+# balloon 本文内の Markdown 風文字装飾。内側両端の非空白要求により、地の文の
+# 単独 `*` `**` `~~`（例: `2 * 3 = 6`）はリテラル維持される。
+# 適用順序: bold-italic → bold → strike → italic（前 3 つは後続の正規表現に
+# 誤マッチさせないため、この順で先取り処理する）。
+BALLOON_BOLDITALIC_RE = re.compile(r"\*\*\*(\S(?:[^*\n]*?\S)?)\*\*\*")
 BALLOON_BOLD_RE = re.compile(r"\*\*(\S(?:[^*\n]*?\S)?)\*\*")
 BALLOON_STRIKE_RE = re.compile(r"~~(\S(?:[^~\n]*?\S)?)~~")
 BALLOON_ITALIC_RE = re.compile(r"\*(\S(?:[^*\n]*?\S)?)\*")
@@ -88,6 +86,7 @@ def build_balloon(side: str, body_text: str) -> str:
 
     さらに Markdown 風の文字装飾を以下のように自動置換する:
 
+    - ``***foo***`` → ``<strong><em>foo</em></strong>``（bold+italic 同時）
     - ``**foo**`` → ``<strong>foo</strong>``
     - ``~~foo~~`` → ``<del>foo</del>``
     - ``*foo*`` → ``<em>foo</em>``
@@ -108,6 +107,7 @@ def build_balloon(side: str, body_text: str) -> str:
         return BALLOON_CODE_PLACEHOLDER.format(len(code_segments) - 1)
 
     compact = BALLOON_CODE_TAG_RE.sub(_store, compact)
+    compact = BALLOON_BOLDITALIC_RE.sub(r"<strong><em>\1</em></strong>", compact)
     compact = BALLOON_BOLD_RE.sub(r"<strong>\1</strong>", compact)
     compact = BALLOON_STRIKE_RE.sub(r"<del>\1</del>", compact)
     compact = BALLOON_ITALIC_RE.sub(r"<em>\1</em>", compact)
