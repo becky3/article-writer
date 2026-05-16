@@ -19,22 +19,24 @@
 
 ## リポジトリマスターテーブル
 
-リポジトリの個別説明（実態説明 + 参照 URL）は外部記事 <https://beckyjpn.hatenablog.com/entry/project> を SSoT とする。
-
 **記事本文での `name` 表記**: ジャーナルに登場するリポ名（GitHub `becky3/<name>` の `<name>` 部分）を `` `<name>` `` の backtick 付き形式で本文に書く（例: `` `rag-knowledge` ``、`` `article-writer` ``）。`becky3/<name>` 形式や Issue / PR 番号は本文に書かない。
 
-| name | visibility |
+「プロジェクトの説明セクション」では、本テーブルから話に関連しないリポの行を削除して掲載する（本文に名前が出ていなくても、素材ジャーナルと文脈から関連すると判断したものは残す）。
+
+| リポジトリ名 | 説明 |
 |---|---|
-| agent-commons | private |
-| ai-assistant | public |
-| article-writer | public |
-| becky3.github.io | public |
-| comfyui-workspace | public |
-| knowledge-ingest-pipeline | public |
-| my-life | private |
-| py-common-lib | public |
-| rag-knowledge | public |
-| shared-workflows | public |
+| `agent-commons` | `~/.claude/` 配下に配置する全プロジェクト共通の Claude Code 設定（ルール・スキル・エージェント・Hooks・仕様書テンプレート） |
+| [`ai-assistant`](https://github.com/becky3/ai-assistant) | Slack 上で動作する AI 学習支援ボット。RSS 要約配信・チャット応答・Remote Control 起動などを担う |
+| [`article-writer`](https://github.com/becky3/article-writer) | 開発ジャーナル・仕様書・Issue を素材に Zenn / はてな等の技術記事や日記を生成する Claude Code スキル群 |
+| [`becky3.github.io`](https://github.com/becky3/becky3.github.io) | GitHub Pages 公開のポートフォリオ。HTML / CSS / JS をビルドなしで配信 |
+| [`comfyui-workspace`](https://github.com/becky3/comfyui-workspace) | ComfyUI のカスタムノード（LM Studio 連携等）とワークフロー（画像生成系）の管理 |
+| [`knowledge-ingest-pipeline`](https://github.com/becky3/knowledge-ingest-pipeline) | RSS から記事を取得し OpenAI で要約して Notion に保存するスクリプト。ローカル実行と GitHub Actions の両対応 |
+| `my-life` | 個人履歴系ドキュメントを保管するリポ。現状は職務経歴書 (Resume.adoc) を扱う |
+| [`py-common-lib`](https://github.com/becky3/py-common-lib) | 複数プロジェクトで共有する Python ユーティリティ。制約付き HTTP クライアント・シークレットストア等を提供 |
+| [`rag-knowledge`](https://github.com/becky3/rag-knowledge) | ChromaDB + BM25 のハイブリッド検索 RAG サービス。Web / Bluesky / YouTube / Zenn / Journal の各インジェスタを持ち MCP サーバーとして公開 |
+| [`shared-workflows`](https://github.com/becky3/shared-workflows) | GitHub Actions の Reusable Workflows 集約リポ（Claude Code Action / PR 品質チェック / Auto Fix / 事後レビュースキャナー等） |
+
+リンクがないものは private リポジトリ。
 
 ---
 
@@ -73,14 +75,15 @@ category: "diary"
 
 - 本文中でリポジトリに言及する場合は、`name` を backtick 付きで直接書く
 - `becky3/<name>` 形式・GitHub URL・Issue / PR 番号は本文に書かない
-- リポの個別説明は記事内に書かない（プロジェクトの説明セクションの外部記事に集約済）
+- リポの個別説明は本文中に書かない（プロジェクトの説明セクションのテーブルで掲載）
 
-### 冒頭セクションの順序
+### セクション配置の順序
 
-- 記事冒頭は以下の順で固定挿入する（言及リポの有無に関わらず常に挿入）
-  1. `## 登場人物` — 登場人物セクション（3 カードの固定 HTML）
-  2. `## プロジェクトの説明` — プロジェクト説明への外部リンク
-- 続いて本文最初の H2 シーンへ繋げる
+- 記事は以下の順で構成する
+  1. タイトル H1
+  2. `## 登場人物` — 登場人物セクション（タイトル H1 直下、3 カードの固定 HTML）
+  3. 本文の H2 シーン（複数）
+  4. `## プロジェクトの説明` — 末尾。話に関連するリポジトリ一覧（テーブル）と全プロジェクト一覧へのリンク
 
 ### 登場人物セクション
 
@@ -103,7 +106,7 @@ category: "diary"
 </div>
 <div class="char-card char-b">
 <div class="icon"></div>
-<div class="desc"><strong>幸田姉さん</strong>（先輩・40 歳）<br>達観して見える相棒タイプ。クロちゃんの先輩。<br>{{char-B-line}}</div>
+<div class="desc"><strong>幸田姉さん</strong>（先輩・36 歳）<br>達観して見える相棒タイプ。クロちゃんの先輩。<br>{{char-B-line}}</div>
 </div>
 <div class="char-card char-c">
 <div class="icon"></div>
@@ -120,19 +123,26 @@ category: "diary"
 
 ### プロジェクトの説明セクション
 
-- 配置: 「登場人物セクション」の直下
+- 配置: 記事末尾（本文の最後の H2 シーンの後ろ）
 - 言及リポの有無に関わらず常に挿入する
-- 以下の固定文言で挿入する:
+- 上記「リポジトリマスターテーブル」をそのまま貼り、話に関連しないリポの行を削除する
+- 末尾に[プロジェクト説明](https://beckyjpn.hatenablog.com/entry/project)（全プロジェクト一覧）へのリンクを添える
+
+セクション本体:
 
 ```markdown
 ## プロジェクトの説明
 
-リポジトリ名などの説明は以下を参照ください。
+話に関連するプロジェクト一覧です。
 
-[プロジェクト説明](https://beckyjpn.hatenablog.com/entry/project)
+| リポジトリ名 | 説明 |
+|---|---|
+（マスターテーブルから話に関連する分を抜粋）
+
+リンクがないものは private リポジトリです。
+
+全プロジェクトの一覧は[プロジェクト説明](https://beckyjpn.hatenablog.com/entry/project)を参照してください。
 ```
-
-リポごとの実態説明・visibility 表記・GitHub URL は外部記事側で管理する。
 
 ---
 
