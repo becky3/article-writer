@@ -38,6 +38,26 @@ argument-hint: "[YYYY-MM-DD] [--force]"
 
 ## 処理手順
 
+### Phase 0: 環境セットアップ（worktree 対応）
+
+`.env` はリポジトリルートに配置する必要があるが、git-worktree で作業中は worktree 側に `.env` が存在しない（`.gitignore` 対象のためチェックアウトされない）。
+
+スクリプト実行前に以下を確認し、必要なら親リポからコピーする:
+
+```bash
+if [ ! -f .env ]; then
+  MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
+  if [ -f "$MAIN_REPO/.env" ]; then
+    cp "$MAIN_REPO/.env" .env
+    echo "INFO: 親リポから .env をコピーしました: $MAIN_REPO/.env -> .env"
+  fi
+fi
+```
+
+親リポにも `.env` がない場合は初期設定未整備のため、本セクション冒頭「前提条件」テーブルに従い `.env` を新規作成してから再実行する。
+
+worktree でない（親リポで直接実行）場合は本 Phase はスキップされる（条件分岐により実行されない）。
+
 ### Phase 1: 引数パース
 
 1. `$ARGUMENTS` を空白で分割
