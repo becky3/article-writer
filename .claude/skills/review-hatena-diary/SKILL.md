@@ -27,7 +27,7 @@ argument-hint: "<対象ファイルパス>"
 
 例:
 
-- `/review-hatena-diary articles/hatena/2026-05-16-114600-diary-style-revamp.md`
+- `/review-hatena-diary articles/hatena/2026-05-16-11-46-00-diary-style-revamp.md`
 
 引数が空、または対象ファイルが存在しない場合はエラー表示して停止する。
 
@@ -141,7 +141,7 @@ argument-hint: "<対象ファイルパス>"
 - ディレクトリ: `.tmp/review-hatena-diary/`（存在しなければ `Bash` ツールで `mkdir -p` で作成）
 - ファイル名: `<日時>-<slug>.md`
   - `<日時>`: `YYYYMMDD-HHMMSS` 形式（`Bash` ツールで `date '+%Y%m%d-%H%M%S'` で取得）
-  - `<slug>`: 対象ファイル名から拡張子を除いた値（例: `articles/hatena/2026-05-16-114600-foo.md` → `2026-05-16-114600-foo`）
+  - `<slug>`: 対象ファイル名から拡張子を除いた値（例: `articles/hatena/2026-05-16-11-46-00-foo.md` → `2026-05-16-11-46-00-foo`）
 
 集約ファイルのフォーマット:
 
