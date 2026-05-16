@@ -46,17 +46,18 @@ argument-hint: "[YYYY-MM-DD] [--force]"
 
 ```bash
 if [ ! -f .env ]; then
-  MAIN_REPO=$(git worktree list | head -1 | awk '{print $1}')
-  if [ -f "$MAIN_REPO/.env" ]; then
+  # git worktree list --porcelain の "worktree <path>" 行を抽出（パスにスペースを含んでも安全）
+  MAIN_REPO=$(git worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
+  if [ -n "$MAIN_REPO" ] && [ -f "$MAIN_REPO/.env" ]; then
     cp "$MAIN_REPO/.env" .env
     echo "INFO: 親リポから .env をコピーしました: $MAIN_REPO/.env -> .env"
   fi
 fi
 ```
 
-親リポにも `.env` がない場合は初期設定未整備のため、本セクション冒頭「前提条件」テーブルに従い `.env` を新規作成してから再実行する。
+実行される条件は **カレントに `.env` が無い** ことのみ。worktree 内では `.env` がチェックアウトされないため通常該当する。親リポで直接実行している場合は通常 `.env` が存在するため外側の `if` で弾かれて実質スキップされる。
 
-worktree でない（親リポで直接実行）場合は本 Phase はスキップされる（条件分岐により実行されない）。
+カレントにも親リポにも `.env` がない場合は初期設定未整備のため、本セクション冒頭「前提条件」テーブルに従い `.env` を新規作成してから再実行する。
 
 ### Phase 1: 引数パース
 
