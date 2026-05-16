@@ -1,7 +1,7 @@
 """convert_article_html.py のユニットテスト.
 
 仕様: .claude/skills/write-hatena-diary/balloon-html.md
-計画: aidlc-docs/plan-work/issue-47.md (テスト方針)
+計画: aidlc-docs/plan-work/issue-53.md (テスト方針)
 
 実行:
 
@@ -112,6 +112,111 @@ class BalloonConvertTest(unittest.TestCase):
             '<div class="text"><code>agent-commons</code> のルール改修をしてて</div>',
             out,
         )
+
+    def test_balloon_bold_is_converted_to_strong(self) -> None:
+        # **foo** が <strong>foo</strong> に自動置換される。
+        src = ":::kuro-chan\nこれは **重要** な話です\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn(
+            '<div class="text">これは <strong>重要</strong> な話です</div>',
+            out,
+        )
+
+    def test_balloon_italic_is_converted_to_em(self) -> None:
+        # *foo* が <em>foo</em> に自動置換される。
+        src = ":::kuro-chan\nこれは *強調* された言葉\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn(
+            '<div class="text">これは <em>強調</em> された言葉</div>',
+            out,
+        )
+
+    def test_balloon_strikethrough_is_converted_to_del(self) -> None:
+        # ~~foo~~ が <del>foo</del> に自動置換される。
+        src = ":::kuro-chan\nもう ~~古い~~ 話\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn(
+            '<div class="text">もう <del>古い</del> 話</div>',
+            out,
+        )
+
+    def test_balloon_bold_takes_priority_over_italic(self) -> None:
+        # **foo** が *foo* として italic 誤マッチしないこと。
+        src = ":::kuro-chan\n**太字** のみ\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn("<strong>太字</strong>", out)
+        self.assertNotIn("<em>", out)
+
+    def test_balloon_decorations_not_applied_inside_code(self) -> None:
+        # <code> 内部の **foo** は装飾置換されず、リテラルのまま残る
+        # （backtick 自動変換 → code プレースホルダー退避 → 装飾置換の順）。
+        src = ":::kuro-chan\n`**not bold**` のままで残す\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn(
+            '<div class="text"><code>**not bold**</code> のままで残す</div>',
+            out,
+        )
+        self.assertNotIn("<strong>", out)
+
+    def test_balloon_decoration_and_code_coexist(self) -> None:
+        # 装飾と code が混在しても、それぞれ独立に変換される。
+        src = ":::kuro-chan\n**強調** と `code` を併用\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn(
+            '<div class="text"><strong>強調</strong> と <code>code</code> を併用</div>',
+            out,
+        )
+
+    def test_balloon_multiple_bold_in_one_balloon(self) -> None:
+        # 1 つの balloon 内に複数の **bold** がある場合、すべて <strong> 化される。
+        src = ":::kuro-chan\n**A** と **B** が両方\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn("<strong>A</strong> と <strong>B</strong>", out)
+
+    def test_balloon_single_asterisk_with_surrounding_space_is_literal(self) -> None:
+        # 地の文の単独 `*`（前後空白）は装飾として誤発火せずリテラルのまま残る。
+        src = ":::kuro-chan\n計算: 2 * 3 = 6 と 4 * 5 = 20\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn(
+            '<div class="text">計算: 2 * 3 = 6 と 4 * 5 = 20</div>',
+            out,
+        )
+        self.assertNotIn("<em>", out)
+
+    def test_balloon_double_asterisk_with_surrounding_space_is_literal(self) -> None:
+        # 地の文の単独 `**`（前後空白）も bold として誤発火しない。
+        src = ":::kuro-chan\n計算: 2 ** 3 = 8\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn(
+            '<div class="text">計算: 2 ** 3 = 8</div>',
+            out,
+        )
+        self.assertNotIn("<strong>", out)
+
+    def test_balloon_tilde_with_surrounding_space_is_literal(self) -> None:
+        # 地の文の単独 `~~`（前後空白）も strike として誤発火しない。
+        src = ":::kuro-chan\n波線 ~~ 単体は残す\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn(
+            '<div class="text">波線 ~~ 単体は残す</div>',
+            out,
+        )
+        self.assertNotIn("<del>", out)
+
+    def test_balloon_decoration_inner_whitespace_not_matched(self) -> None:
+        # 内側が空白で始まる/終わる `* foo*` / `*foo *` は装飾としてマッチしない。
+        src = ":::kuro-chan\n`* foo*` と `*foo *` は装飾にならない\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertNotIn("<em> foo</em>", out)
+        self.assertNotIn("<em>foo </em>", out)
+
+    def test_balloon_single_char_decoration_matches(self) -> None:
+        # 1 文字の装飾（`*a*` `**b**` `~~c~~`）は内側が非空白 1 文字としてマッチする。
+        src = ":::kuro-chan\n*a* と **b** と ~~c~~\n:::\n"
+        out = convert_article_html.convert(src)
+        self.assertIn("<em>a</em>", out)
+        self.assertIn("<strong>b</strong>", out)
+        self.assertIn("<del>c</del>", out)
 
 
 class BlueskyConvertTest(unittest.TestCase):
