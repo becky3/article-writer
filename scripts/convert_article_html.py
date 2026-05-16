@@ -43,6 +43,19 @@ BALLOON_NAME_TO_SIDE = {
 # 書き手は balloon の内外を問わず `...` で書ける（balloon の外は Markdown が
 # 効くため backtick がそのまま <code> 体になり、内側は本関数で置換される）。
 BALLOON_INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
+# balloon 本文内の Markdown 風文字装飾。内側両端の非空白要求により、地の文の
+# 単独 `*` `**` `~~`（例: `2 * 3 = 6`）はリテラル維持される。
+# 適用順序: bold-italic → bold → strike → italic（前 3 つは後続の正規表現に
+# 誤マッチさせないため、この順で先取り処理する）。
+BALLOON_BOLDITALIC_RE = re.compile(r"\*\*\*(\S(?:[^*\n]*?\S)?)\*\*\*")
+BALLOON_BOLD_RE = re.compile(r"\*\*(\S(?:[^*\n]*?\S)?)\*\*")
+BALLOON_STRIKE_RE = re.compile(r"~~(\S(?:[^~\n]*?\S)?)~~")
+BALLOON_ITALIC_RE = re.compile(r"\*(\S(?:[^*\n]*?\S)?)\*")
+# 装飾置換の前に <code>...</code> 内部をプレースホルダーへ退避するための正規表現。
+# code 内の `**` `*` `~~` を装飾として誤発火させないため、置換 → 装飾変換 → 復元
+# の 3 段で処理する。
+BALLOON_CODE_TAG_RE = re.compile(r"<code>.*?</code>")
+BALLOON_CODE_PLACEHOLDER = "\x00CODE{}\x00"
 
 REQUIRED_BLUESKY_KEYS = (
     "did",
@@ -70,9 +83,36 @@ def build_balloon(side: str, body_text: str) -> str:
     に自動置換する。これにより書き手は balloon の内外を問わず同じ書き方
     （``` `agent-commons` ```）でリポ名・コード断片を表現できる。書き手が直接
     ``<code>...</code>`` を書いた場合はそのまま通る（HTML 直書きの性質を保つ）。
+
+    さらに Markdown 風の文字装飾を以下のように自動置換する:
+
+    - ``***foo***`` → ``<strong><em>foo</em></strong>``（bold+italic 同時）
+    - ``**foo**`` → ``<strong>foo</strong>``
+    - ``~~foo~~`` → ``<del>foo</del>``
+    - ``*foo*`` → ``<em>foo</em>``
+
+    各装飾は内側の最初と最後が **非空白** であることを要求する。これにより
+    地の文の単独 ``*`` ``**`` ``~~``（例: ``2 * 3 = 6``）が誤発火しない。
+
+    装飾は ``<code>...</code>`` の外側のみ作用する（code 内部はプレースホルダー
+    退避により装飾置換から保護される）。アンダースコア形式（``__bold__`` /
+    ``_italic_``）は日本語混じり文での誤爆リスクが高いため非対応。
     """
     compact = re.sub(r"\s*\n\s*", " ", body_text.strip())
     compact = BALLOON_INLINE_CODE_RE.sub(r"<code>\1</code>", compact)
+    code_segments: list[str] = []
+
+    def _store(match: re.Match[str]) -> str:
+        code_segments.append(match.group(0))
+        return BALLOON_CODE_PLACEHOLDER.format(len(code_segments) - 1)
+
+    compact = BALLOON_CODE_TAG_RE.sub(_store, compact)
+    compact = BALLOON_BOLDITALIC_RE.sub(r"<strong><em>\1</em></strong>", compact)
+    compact = BALLOON_BOLD_RE.sub(r"<strong>\1</strong>", compact)
+    compact = BALLOON_STRIKE_RE.sub(r"<del>\1</del>", compact)
+    compact = BALLOON_ITALIC_RE.sub(r"<em>\1</em>", compact)
+    for idx, segment in enumerate(code_segments):
+        compact = compact.replace(BALLOON_CODE_PLACEHOLDER.format(idx), segment)
     return (
         f'<div class="balloon balloon-{side}">'
         f'<div class="icon"></div>'
