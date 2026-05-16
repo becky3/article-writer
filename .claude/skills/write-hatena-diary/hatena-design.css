@@ -15,7 +15,7 @@
  *   --char-A: 本文吹き出し（クロちゃん側、左）とキャラ紹介カード char-a で使用
  *   --char-B: 本文吹き出し（幸田姉さん側、右）とキャラ紹介カード char-b で使用
  *   --char-C: キャラ紹介カード char-c で使用。社長は本文の対話には登場しないが、
- *             登場人物セクションには表示する（persona.md セクション 3 参照）
+ *             登場人物セクションには表示する（quality-guidelines.md Part 1「オーナー（社長）の位置づけ」参照）
  */
 
 :root {
@@ -86,8 +86,8 @@
 /* キャラ紹介カード */
 .characters {
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
+  flex-direction: column;
+  gap: 12px;
   margin: 1.5em 0;
   padding: 16px;
   background: #fafafa;
@@ -97,8 +97,6 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 1 1 220px;
-  min-width: 220px;
 }
 .char-card .icon {
   width: 56px;

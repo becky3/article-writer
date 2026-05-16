@@ -58,7 +58,7 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 1. 対象記事の選択（`DATE` 指定時はファイル名前方一致、未指定時は最新）
 2. フロントマター（`title` / `date` / `category`）解析と本文取得
 3. 本文先頭の `# <title>` 行剥がし（はてなブログはエントリ title を別管理するため重複を避ける）
-4. **簡素記法ブロックを HTML に展開**: `scripts/convert_article_html.py` の `convert()` を呼び、`:::l` / `:::r` / `:::bluesky` を対応 HTML へ変換する（記法仕様は `.claude/skills/write-hatena-diary/balloon-html.md`）。変換エラー時はスクリプト全体を停止
+4. **簡素記法ブロックを HTML に展開**: `scripts/convert_article_html.py` の `convert()` を呼び、`:::kuro-chan` / `:::nee-san` / `:::bluesky` を対応 HTML へ変換する（記法仕様は `.claude/skills/write-hatena-diary/balloon-html.md`）。変換エラー時はスクリプト全体を停止
 5. `published.txt` の重複検知（フロントマターの `date:` と同じ日付のエントリが既にあるか）
 6. `.env` から `HATENA_ID` / `HATENA_BLOG_ID` を取得
 7. keyring から `HATENA_API_KEY` を取得
@@ -95,7 +95,7 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 | 引数の日付形式が不正 | スクリプトがエラー表示 + 停止 |
 | フロントマター（`title` / `date`）が未設定 | スクリプトがエラー表示 + 停止 |
 | フロントマター `date:` が `YYYY-MM-DD` 形式でない | スクリプトがエラー表示 + 停止（`<updated>` 組み立て前に検証する） |
-| 簡素記法ブロック（`:::l` / `:::r` / `:::bluesky`）の構文エラー（未閉鎖・必須キー欠落等） | スクリプトがエラー表示 + 停止。エラーメッセージは行番号付き |
+| 簡素記法ブロック（`:::kuro-chan` / `:::nee-san` / `:::bluesky`）の構文エラー（未閉鎖・必須キー欠落等） | スクリプトがエラー表示 + 停止。エラーメッセージは行番号付き |
 | 同じ日付のエントリが既に `published.txt` に存在（重複検知） | スクリプトが警告 + 停止。再投稿が妥当なら `--force` で再実行する |
 | HTTP 401 / 403 | API キーまたは権限不足。keyring 登録値とブログオーナー権限を確認 |
 | HTTP 5xx / タイムアウト | リトライは実装しない。少し時間を置いてから再実行する |
