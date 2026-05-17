@@ -5,30 +5,33 @@
 処理:
 
 1. 対象記事を選択（引数: 日付 YYYY-MM-DD、未指定時は最新ファイル）
-2. articles/hatena/published.txt で重複検知（同日付エントリの有無で判定）
-3. フロントマター（title / date / category）を解析、本文を取得
-4. リポジトリルートの .env から HATENA_ID / HATENA_BLOG_ID を取得
-5. keyring から HATENA_API_KEY を取得（service="article-writer"）
-6. AtomPub Atom Entry XML を組み立て（`<title>` / `<updated>` / `<content type="text/x-markdown">` / `<app:draft>yes</app:draft>` / `<category>`）
-7. Basic 認証で POST
-8. 成功時に published.txt にエントリを追記し、Entry ID と管理画面 URL を表示
+2. articles/hatena/published.jsonl から同日付エントリを検索（edit_url 付き / edit_url 欠落 / 未登録 の 3 状態）
+3. --force なし & 既存ありなら停止、--force あり & 未登録または edit_url 欠落なら停止
+4. フロントマター（title / date / category）を解析、本文を取得
+5. リポジトリルートの .env から HATENA_ID / HATENA_BLOG_ID を取得
+6. keyring から HATENA_API_KEY を取得（service="article-writer"）
+7. AtomPub Atom Entry XML を組み立て（`<title>` / `<updated>` / `<content type="text/x-markdown">` / `<app:draft>yes</app:draft>` / `<category>`）
+8. Basic 認証で --force なしは POST、--force ありは既存 edit_url へ PUT
+9. POST 成功時 published.jsonl に 1 行 JSON を追記、PUT 成功時は既存行を保持
 
 使用例:
 
-    python scripts/publish_hatena.py              # 最新の記事を下書き登録
-    python scripts/publish_hatena.py 2026-05-13   # 指定日付の記事を下書き登録
-    python scripts/publish_hatena.py --force      # 重複検知を無視して投稿
+    python scripts/publish_hatena.py              # 最新の記事を下書き登録（POST）
+    python scripts/publish_hatena.py 2026-05-13   # 指定日付の記事を下書き登録（POST）
+    python scripts/publish_hatena.py --force      # 同日エントリを PUT で更新
 """
 from __future__ import annotations
 
 import argparse
 import base64
+import json
 import pathlib
 import re
 import sys
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+from typing import TypedDict
 
 import keyring
 
@@ -37,10 +40,17 @@ import convert_article_html
 SERVICE = "article-writer"
 KEY_API_KEY = "HATENA_API_KEY"
 
+
+class PublishedEntry(TypedDict):
+    date: str
+    title: str
+    edit_url: str | None
+
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 ENV_FILE = REPO_ROOT / ".env"
 ARTICLES_DIR = REPO_ROOT / "articles" / "hatena"
-PUBLISHED_TXT = ARTICLES_DIR / "published.txt"
+PUBLISHED_JSONL = ARTICLES_DIR / "published.jsonl"
 
 
 def load_env() -> dict[str, str]:
@@ -173,18 +183,40 @@ def strip_leading_h1(body: str, title: str) -> str:
     return body
 
 
-def check_duplicate(diary_date: str) -> bool:
-    """記事フロントマターの diary 日付が既に published.txt にあるか確認する.
+def parse_published() -> list[PublishedEntry]:
+    """published.jsonl のデータ行を辞書のリストとして返す.
 
-    本ツールは 1 日 1 記事を前提とするため、同じ日付のエントリが既にあれば
-    重複と判定する。
+    各行は `{"date": "...", "title": "...", "edit_url": "..." or null}` 形式の JSON。
+    空行・JSON パース失敗行・必須キー欠落行はスキップする。
     """
-    if not PUBLISHED_TXT.exists():
-        return False
-    for line in PUBLISHED_TXT.read_text(encoding="utf-8").splitlines():
-        if line.lstrip().startswith(f"- ({diary_date})"):
-            return True
-    return False
+    if not PUBLISHED_JSONL.exists():
+        return []
+    entries: list[PublishedEntry] = []
+    for line in PUBLISHED_JSONL.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            obj = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        date = obj.get("date")
+        title = obj.get("title")
+        if not isinstance(date, str) or not isinstance(title, str):
+            continue
+        edit_url = obj.get("edit_url")
+        if edit_url is not None and not isinstance(edit_url, str):
+            edit_url = None
+        entries.append({"date": date, "title": title, "edit_url": edit_url})
+    return entries
+
+
+def lookup_published(diary_date: str) -> PublishedEntry | None:
+    """published.jsonl 内で指定日付のエントリを返す. 無ければ None."""
+    for entry in parse_published():
+        if entry["date"] == diary_date:
+            return entry
+    return None
 
 
 def build_atom_entry(
@@ -225,23 +257,23 @@ def basic_auth_header(hatena_id: str, api_key: str) -> str:
     return f"Basic {token}"
 
 
-def post_entry(
+def send_entry(
     *,
+    method: str,
+    url: str,
     hatena_id: str,
-    blog_id: str,
     api_key: str,
     payload: bytes,
 ) -> tuple[int, str]:
-    """AtomPub に POST する.
+    """AtomPub に POST または PUT を送信する.
 
     戻り値の HTTP status はネットワーク失敗時 -1 を返す（HTTP ステータスと識別可能にするため）。
     呼び出し元は 200/201 以外を全て失敗として扱う。
     """
-    url = f"https://blog.hatena.ne.jp/{hatena_id}/{blog_id}/atom/entry"
     req = urllib.request.Request(
         url,
         data=payload,
-        method="POST",
+        method=method,
         headers={
             "Authorization": basic_auth_header(hatena_id, api_key),
             "Content-Type": "application/atom+xml; charset=utf-8",
@@ -258,6 +290,39 @@ def post_entry(
         return -1, f"network error: {e}"
 
 
+def post_entry(
+    *,
+    hatena_id: str,
+    blog_id: str,
+    api_key: str,
+    payload: bytes,
+) -> tuple[int, str]:
+    url = f"https://blog.hatena.ne.jp/{hatena_id}/{blog_id}/atom/entry"
+    return send_entry(
+        method="POST",
+        url=url,
+        hatena_id=hatena_id,
+        api_key=api_key,
+        payload=payload,
+    )
+
+
+def put_entry(
+    *,
+    edit_url: str,
+    hatena_id: str,
+    api_key: str,
+    payload: bytes,
+) -> tuple[int, str]:
+    return send_entry(
+        method="PUT",
+        url=edit_url,
+        hatena_id=hatena_id,
+        api_key=api_key,
+        payload=payload,
+    )
+
+
 def extract_entry_id(response_body: str) -> str | None:
     try:
         root = ET.fromstring(response_body)
@@ -268,27 +333,33 @@ def extract_entry_id(response_body: str) -> str | None:
     return elem.text if elem is not None else None
 
 
-def extract_edit_url(response_body: str) -> str | None:
-    """レスポンスから人間向けの編集 URL（rel="alternate"）を取り出す."""
+def extract_link_href(response_body: str, *, rel: str) -> str | None:
+    """レスポンスから指定 rel の link href を取り出す.
+
+    rel="alternate" は人間向けの公開閲覧 URL、rel="edit" は AtomPub の PUT 用 URL。
+    """
     try:
         root = ET.fromstring(response_body)
     except ET.ParseError:
         return None
     ns = {"atom": "http://www.w3.org/2005/Atom"}
     for link in root.findall("atom:link", ns):
-        if link.get("rel") == "alternate":
+        if link.get("rel") == rel:
             return link.get("href")
     return None
 
 
-def append_published(diary_date: str, title: str) -> None:
-    """published.txt に 1 行追記する.
+def append_published(diary_date: str, title: str, edit_url: str | None) -> None:
+    """published.jsonl に 1 行 JSON を追記する.
 
     日付欄は記事フロントマターの `date:` をそのまま使う（日記対象日）。
+    edit_url が None なら `"edit_url": null` で出力する。
+    日本語を `\\uXXXX` エスケープせず人間可読のまま保存するため ensure_ascii=False を指定する。
     """
-    line = f"- ({diary_date}) {title}\n"
-    PUBLISHED_TXT.parent.mkdir(parents=True, exist_ok=True)
-    with PUBLISHED_TXT.open("a", encoding="utf-8") as f:
+    record = {"date": diary_date, "title": title, "edit_url": edit_url}
+    line = json.dumps(record, ensure_ascii=False) + "\n"
+    PUBLISHED_JSONL.parent.mkdir(parents=True, exist_ok=True)
+    with PUBLISHED_JSONL.open("a", encoding="utf-8") as f:
         f.write(line)
 
 
@@ -304,7 +375,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="published.txt の重複検知を無視して投稿する",
+        help="published.jsonl 記録済みエントリの edit_url へ PUT で上書き更新する（新規投稿には使えない）",
     )
     args = parser.parse_args(argv)
 
@@ -326,10 +397,31 @@ def main(argv: list[str] | None = None) -> int:
     except convert_article_html.ConvertError as e:
         raise SystemExit(f"❌ 記事本文の簡素記法変換に失敗: {e}") from e
 
-    already_published = check_duplicate(diary_date)
-    if already_published and not args.force:
+    existing = lookup_published(diary_date)
+    if args.force:
+        if existing is None:
+            msg = (
+                f"⚠️ --force 指定ですが、{diary_date} のエントリが "
+                f"{PUBLISHED_JSONL.relative_to(REPO_ROOT)} に登録されていません。\n"
+                f"  --force は PUT で既存エントリを更新する動作のため、新規投稿には使えません。\n"
+                f"  新規投稿する場合は --force を外して再実行してください。"
+            )
+            print(msg, file=sys.stderr)
+            return 1
+        if existing["edit_url"] is None:
+            msg = (
+                f"⚠️ --force 指定ですが、{diary_date} のエントリに edit_url が記録されていません。\n"
+                f"  以下の手順で edit_url を {PUBLISHED_JSONL.relative_to(REPO_ROOT)} に手動追記してから再実行してください:\n"
+                f"  1. はてなブログ管理画面で対象記事を開き、AtomPub edit URL を確認する\n"
+                f"     URL 形式: https://blog.hatena.ne.jp/<HATENA_ID>/<HATENA_BLOG_ID>/atom/entry/<entry_id_part>\n"
+                f"  2. 該当行の \"edit_url\" を null から URL 文字列に書き換える"
+            )
+            print(msg, file=sys.stderr)
+            return 1
+    elif existing is not None:
         msg = (
-            f"⚠️ 同じ日付 ({diary_date}) のエントリが既に published.txt にあります\n"
+            f"⚠️ 同じ日付 ({diary_date}) のエントリが既に "
+            f"{PUBLISHED_JSONL.relative_to(REPO_ROOT)} にあります\n"
             f"  再投稿する場合は --force で再実行する"
         )
         print(msg, file=sys.stderr)
@@ -351,14 +443,28 @@ def main(argv: list[str] | None = None) -> int:
         draft=True,
         published_iso=published_iso,
     )
-    print(f"📤 POST 中 (title: {title})", file=sys.stderr)
 
-    status, response = post_entry(
-        hatena_id=hatena_id,
-        blog_id=blog_id,
-        api_key=api_key,
-        payload=payload,
-    )
+    if args.force:
+        assert existing is not None
+        target_edit_url = existing["edit_url"]
+        assert target_edit_url is not None
+        print(f"🔄 PUT 中 (title: {title})", file=sys.stderr)
+        status, response = put_entry(
+            edit_url=target_edit_url,
+            hatena_id=hatena_id,
+            api_key=api_key,
+            payload=payload,
+        )
+        op_label = "下書き更新成功"
+    else:
+        print(f"📤 POST 中 (title: {title})", file=sys.stderr)
+        status, response = post_entry(
+            hatena_id=hatena_id,
+            blog_id=blog_id,
+            api_key=api_key,
+            payload=payload,
+        )
+        op_label = "下書き登録成功"
 
     if status not in (200, 201):
         if status == -1:
@@ -370,29 +476,39 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     entry_id = extract_entry_id(response)
-    edit_url = extract_edit_url(response)
-    print("✅ 下書き登録成功")
+    public_url = extract_link_href(response, rel="alternate")
+    edit_url = extract_link_href(response, rel="edit")
+    print(f"✅ {op_label}")
     print(f"  記事: {article_path.relative_to(REPO_ROOT)}")
     print(f"  Entry ID: {entry_id if entry_id else '(取得失敗・管理画面で確認)'}")
-    if edit_url:
-        print(f"  URL: {edit_url}")
+    if public_url:
+        print(f"  URL: {public_url}")
 
     append_failed = False
-    if not already_published:
+    if args.force:
+        print("  published.jsonl は既存エントリを保持（--force による更新のため）")
+    else:
         try:
-            append_published(diary_date, title)
-            print("  published.txt に追記済み")
+            append_published(diary_date, title, edit_url)
+            if edit_url:
+                print("  published.jsonl に追記済み（edit_url 含む）")
+            else:
+                print(
+                    "  ⚠️ レスポンスから edit_url を取得できませんでした。"
+                    " published.jsonl には \"edit_url\": null で追記しました。\n"
+                    f"  次回 --force で更新する前に、{PUBLISHED_JSONL.relative_to(REPO_ROOT)} の該当行の edit_url を URL 文字列に書き換えてください。",
+                    file=sys.stderr,
+                )
         except OSError as e:
             append_failed = True
-            line = f"- ({diary_date}) {title}"
+            record = {"date": diary_date, "title": title, "edit_url": edit_url}
+            line = json.dumps(record, ensure_ascii=False)
             print(
-                f"  ⚠️ published.txt 追記に失敗: {e}\n"
-                f"  以下の行を {PUBLISHED_TXT.relative_to(REPO_ROOT)} に追記する:\n"
+                f"  ⚠️ published.jsonl 追記に失敗: {e}\n"
+                f"  以下の行を {PUBLISHED_JSONL.relative_to(REPO_ROOT)} に追記する:\n"
                 f"    {line}",
                 file=sys.stderr,
             )
-    else:
-        print("  published.txt は既存エントリを保持（--force による再投稿のため）")
 
     print(f"  管理画面: https://blog.hatena.ne.jp/{hatena_id}/{blog_id}/edit")
     return 1 if append_failed else 0

@@ -189,9 +189,9 @@ Phase 5 で当該日の記事を Write した直後、本ステップで `/revie
 
 ## 投稿（別スキル）
 
-本スキルは記事生成までを担う。はてなブログへの下書き登録は `/publish-hatena` スキル（`.claude/skills/publish-hatena/SKILL.md`）で行う。`/publish-hatena` が `articles/hatena/published.txt` への記録追記も担当する。
+本スキルは記事生成までを担う。はてなブログへの下書き登録は `/publish-hatena` スキル（`.claude/skills/publish-hatena/SKILL.md`）で行う。`/publish-hatena` が `articles/hatena/published.jsonl` への記録追記も担当する。
 
-**前提**: 1 日 1 記事。`published.txt` の重複検知は記事フロントマターの `date:`（日記対象日）を使う。複数日まとめて公開しても日記対象日で識別される。
+**前提**: 1 日 1 記事。`published.jsonl` の重複検知は記事フロントマターの `date:`（日記対象日）を使う。複数日まとめて公開しても日記対象日で識別される。
 
 ## エラーハンドリング一覧
 

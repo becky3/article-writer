@@ -194,38 +194,80 @@ class SelectArticleTest(unittest.TestCase):
             publish_hatena.select_article(None)
 
 
-class CheckDuplicateTest(unittest.TestCase):
+class LookupPublishedTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmpdir.cleanup)
-        self.published_path = pathlib.Path(self.tmpdir.name) / "published.txt"
-        # publish_hatena は module-level の PUBLISHED_TXT を参照する
-        self._orig = publish_hatena.PUBLISHED_TXT
-        publish_hatena.PUBLISHED_TXT = self.published_path
-        self.addCleanup(lambda: setattr(publish_hatena, "PUBLISHED_TXT", self._orig))
+        self.published_path = pathlib.Path(self.tmpdir.name) / "published.jsonl"
+        # publish_hatena は module-level の PUBLISHED_JSONL を参照する
+        self._orig = publish_hatena.PUBLISHED_JSONL
+        publish_hatena.PUBLISHED_JSONL = self.published_path
+        self.addCleanup(
+            lambda: setattr(publish_hatena, "PUBLISHED_JSONL", self._orig)
+        )
 
-    def test_no_file_returns_false(self) -> None:
-        self.assertFalse(publish_hatena.check_duplicate("2026-05-13"))
+    def test_no_file_returns_none(self) -> None:
+        self.assertIsNone(publish_hatena.lookup_published("2026-05-13"))
 
-    def test_matching_date_returns_true(self) -> None:
+    def test_entry_without_edit_url(self) -> None:
         self.published_path.write_text(
-            "# comment\n- (2026-05-12) 既存記事\n- (2026-05-13) 別の記事\n",
+            '{"date": "2026-05-12", "title": "edit_url 未保存の記事", "edit_url": null}\n',
             encoding="utf-8",
         )
-        self.assertTrue(publish_hatena.check_duplicate("2026-05-13"))
+        entry = publish_hatena.lookup_published("2026-05-12")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry["date"], "2026-05-12")
+        self.assertEqual(entry["title"], "edit_url 未保存の記事")
+        self.assertIsNone(entry["edit_url"])
 
-    def test_non_matching_date_returns_false(self) -> None:
+    def test_entry_with_edit_url(self) -> None:
         self.published_path.write_text(
-            "- (2026-05-12) 既存記事\n", encoding="utf-8"
+            '{"date": "2026-05-13", "title": "edit_url 保存済みの記事",'
+            ' "edit_url": "https://example.com/atom/entry/1"}\n',
+            encoding="utf-8",
         )
-        self.assertFalse(publish_hatena.check_duplicate("2026-05-13"))
+        entry = publish_hatena.lookup_published("2026-05-13")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry["title"], "edit_url 保存済みの記事")
+        self.assertEqual(entry["edit_url"], "https://example.com/atom/entry/1")
 
-    def test_commented_date_is_ignored(self) -> None:
-        # '# - (2026-05-13) ...' のようなコメント行は重複扱いしない
+    def test_title_with_special_chars_is_preserved(self) -> None:
+        # JSON エスケープを通して特殊文字を含むタイトルが復元できる
         self.published_path.write_text(
-            "# - (2026-05-13) 例示行\n", encoding="utf-8"
+            '{"date": "2026-05-13", "title": "装飾 | や \\"記号\\" を含むタイトル",'
+            ' "edit_url": "https://example.com/x"}\n',
+            encoding="utf-8",
         )
-        self.assertFalse(publish_hatena.check_duplicate("2026-05-13"))
+        entry = publish_hatena.lookup_published("2026-05-13")
+        self.assertEqual(entry["title"], '装飾 | や "記号" を含むタイトル')
+        self.assertEqual(entry["edit_url"], "https://example.com/x")
+
+    def test_non_matching_date_returns_none(self) -> None:
+        self.published_path.write_text(
+            '{"date": "2026-05-12", "title": "別日付", "edit_url": null}\n',
+            encoding="utf-8",
+        )
+        self.assertIsNone(publish_hatena.lookup_published("2026-05-13"))
+
+    def test_malformed_json_line_is_skipped(self) -> None:
+        # JSON パース失敗行はスキップして後続を読む
+        self.published_path.write_text(
+            "not json at all\n"
+            '{"date": "2026-05-13", "title": "正常エントリ", "edit_url": null}\n',
+            encoding="utf-8",
+        )
+        entry = publish_hatena.lookup_published("2026-05-13")
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry["title"], "正常エントリ")
+
+    def test_missing_required_keys_are_skipped(self) -> None:
+        # date or title が欠落した行はスキップ
+        self.published_path.write_text(
+            '{"title": "date 欠落", "edit_url": null}\n'
+            '{"date": "2026-05-13", "edit_url": null}\n',
+            encoding="utf-8",
+        )
+        self.assertIsNone(publish_hatena.lookup_published("2026-05-13"))
 
 
 class BuildAtomEntryTest(unittest.TestCase):
@@ -301,24 +343,84 @@ class AppendPublishedTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmpdir.cleanup)
-        self.published_path = pathlib.Path(self.tmpdir.name) / "published.txt"
-        self._orig = publish_hatena.PUBLISHED_TXT
-        publish_hatena.PUBLISHED_TXT = self.published_path
-        self.addCleanup(lambda: setattr(publish_hatena, "PUBLISHED_TXT", self._orig))
-
-    def test_appends_line_in_expected_format(self) -> None:
-        publish_hatena.append_published("2026-05-13", "テスト記事")
-        text = self.published_path.read_text(encoding="utf-8")
-        self.assertEqual(text, "- (2026-05-13) テスト記事\n")
-
-    def test_appends_to_existing(self) -> None:
-        self.published_path.write_text(
-            "# comment\n", encoding="utf-8"
+        self.published_path = pathlib.Path(self.tmpdir.name) / "published.jsonl"
+        self._orig = publish_hatena.PUBLISHED_JSONL
+        publish_hatena.PUBLISHED_JSONL = self.published_path
+        self.addCleanup(
+            lambda: setattr(publish_hatena, "PUBLISHED_JSONL", self._orig)
         )
-        publish_hatena.append_published("2026-05-13", "テスト記事")
+
+    def test_appends_with_edit_url(self) -> None:
+        publish_hatena.append_published(
+            "2026-05-13", "テスト記事", "https://example.com/atom/entry/1"
+        )
         text = self.published_path.read_text(encoding="utf-8")
         self.assertEqual(
-            text, "# comment\n- (2026-05-13) テスト記事\n"
+            text,
+            '{"date": "2026-05-13", "title": "テスト記事",'
+            ' "edit_url": "https://example.com/atom/entry/1"}\n',
+        )
+
+    def test_appends_with_null_edit_url(self) -> None:
+        publish_hatena.append_published("2026-05-13", "テスト記事", None)
+        text = self.published_path.read_text(encoding="utf-8")
+        self.assertEqual(
+            text,
+            '{"date": "2026-05-13", "title": "テスト記事", "edit_url": null}\n',
+        )
+
+    def test_appends_to_existing(self) -> None:
+        existing = (
+            '{"date": "2026-05-12", "title": "既存", "edit_url": null}\n'
+        )
+        self.published_path.write_text(existing, encoding="utf-8")
+        publish_hatena.append_published(
+            "2026-05-13", "テスト記事", "https://example.com/atom/entry/1"
+        )
+        text = self.published_path.read_text(encoding="utf-8")
+        self.assertEqual(
+            text,
+            existing
+            + '{"date": "2026-05-13", "title": "テスト記事",'
+            ' "edit_url": "https://example.com/atom/entry/1"}\n',
+        )
+
+    def test_appends_preserves_non_ascii(self) -> None:
+        # ensure_ascii=False により日本語が \\uXXXX エスケープされない
+        publish_hatena.append_published("2026-05-13", "ひらがな", None)
+        text = self.published_path.read_text(encoding="utf-8")
+        self.assertIn("ひらがな", text)
+        self.assertNotIn("\\u3072", text)
+
+
+class ExtractLinkHrefTest(unittest.TestCase):
+    RESPONSE = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<entry xmlns="http://www.w3.org/2005/Atom">\n'
+        '  <id>tag:blog.hatena.ne.jp,2013:blog-foo-bar-baz-entry-123</id>\n'
+        '  <link rel="alternate" type="text/html" href="https://example.hatenablog.com/entry/123"/>\n'
+        '  <link rel="edit" href="https://blog.hatena.ne.jp/foo/bar/atom/entry/123"/>\n'
+        '</entry>\n'
+    )
+
+    def test_alternate_returns_public_url(self) -> None:
+        href = publish_hatena.extract_link_href(self.RESPONSE, rel="alternate")
+        self.assertEqual(href, "https://example.hatenablog.com/entry/123")
+
+    def test_edit_returns_atompub_url(self) -> None:
+        href = publish_hatena.extract_link_href(self.RESPONSE, rel="edit")
+        self.assertEqual(
+            href, "https://blog.hatena.ne.jp/foo/bar/atom/entry/123"
+        )
+
+    def test_unknown_rel_returns_none(self) -> None:
+        self.assertIsNone(
+            publish_hatena.extract_link_href(self.RESPONSE, rel="self")
+        )
+
+    def test_invalid_xml_returns_none(self) -> None:
+        self.assertIsNone(
+            publish_hatena.extract_link_href("not xml at all", rel="edit")
         )
 
 
