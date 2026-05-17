@@ -19,7 +19,7 @@ argument-hint: "[YYYY-MM-DD] [--force]"
 `$ARGUMENTS` の形式:
 
 - **引数なし**: `articles/hatena/` 配下のファイル名順で最新のファイルを対象とする
-- **`YYYY-MM-DD`**: ファイル名がこの日付で始まる記事を対象とする。同日複数あれば最新を選択
+- **`YYYY-MM-DD`**: ファイル名がこの日付で始まる記事を対象とする（1 日 1 記事前提のため、該当する唯一のファイルが選択される）
 - **`--force`**: `published.jsonl` から対象日付の `edit_url` を取得し、AtomPub PUT で既存エントリを上書き更新する。`published.jsonl` の該当行の `title` を最新タイトルに更新する（`edit_url` は既存値を保持、行追加はしない）
   - 対象日付のエントリが `published.jsonl` に未登録の場合はエラー停止（`--force` は更新専用のため、新規投稿には使えない）
   - 対象日付のエントリは登録されているが `edit_url` が `null` の場合もエラー停止。手動で `edit_url` を URL 文字列に書き換えてから再実行する

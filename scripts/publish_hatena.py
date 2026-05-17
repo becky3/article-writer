@@ -119,8 +119,8 @@ def select_article(date: str | None) -> pathlib.Path:
 
     日付プレフィックスを持たない補助ファイル（README.md 等）は候補から除外する。
 
-    ファイル名の `\\d{4}-\\d{2}-\\d{2}` は厳密な日付（年月日の値域）として検証しない。
-    実際の日付一致は frontmatter `date:` に対する検証で担保する。
+    ファイル名の `\\d{4}-\\d{2}-\\d{2}` は形式のみ検証し、年月日の値域（例: 2026-99-99）は検証しない。
+    frontmatter `date:` も `main()` 側で同様に形式のみ検証する仕様（値域検証は AtomPub 側の解釈に委ねる）。
     """
     if not ARTICLES_DIR.exists():
         raise SystemExit(f"記事ディレクトリが存在しません: {ARTICLES_DIR}")
@@ -372,13 +372,22 @@ def update_published_title(diary_date: str, title: str) -> bool:
     PUT (--force) 時に最新タイトルへ追従させるため使用する。
     edit_url は既存値を保持する。
 
+    壊れた JSON 行・空行は変更せずそのまま保持する（他行への影響を避ける）。
+
     Returns:
         True: 該当エントリが見つかり更新成功
-        False: 該当エントリが見つからない
+        False: 該当エントリが見つからない / ファイル不在 / I/O 失敗
+
+    I/O 失敗時（権限不足・ディスクフル等）は警告を stderr に出力し False を返す。
     """
     if not PUBLISHED_JSONL.exists():
         return False
-    lines = PUBLISHED_JSONL.read_text(encoding="utf-8").splitlines()
+    try:
+        text = PUBLISHED_JSONL.read_text(encoding="utf-8")
+    except OSError as e:
+        print(f"  ⚠️ published.jsonl の読み取りに失敗: {e}", file=sys.stderr)
+        return False
+    lines = text.splitlines()
     updated = False
     out_lines: list[str] = []
     for line in lines:
@@ -396,7 +405,11 @@ def update_published_title(diary_date: str, title: str) -> bool:
             updated = True
         out_lines.append(line)
     if updated:
-        PUBLISHED_JSONL.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+        try:
+            PUBLISHED_JSONL.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+        except OSError as e:
+            print(f"  ⚠️ published.jsonl の書き込みに失敗: {e}", file=sys.stderr)
+            return False
     return updated
 
 
@@ -527,9 +540,10 @@ def main(argv: list[str] | None = None) -> int:
             print("  published.jsonl の title を最新タイトルに更新（edit_url は保持）")
         else:
             print(
-                "  ⚠️ published.jsonl に該当エントリが見つからず title 更新をスキップしました",
+                "  ⚠️ published.jsonl の title 更新に失敗しました（該当エントリ未発見または I/O 失敗）",
                 file=sys.stderr,
             )
+            append_failed = True
     else:
         try:
             append_published(diary_date, title, edit_url)
