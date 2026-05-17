@@ -133,18 +133,18 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
     - メタデータ: Phase 2 で取得した key=value 形式（`did` / `cid` / `rkey` / `handle` / `display-name` / `created-at` / `text`、`lang` は任意）
     - 引用部の前提・関係性: `quality-guidelines.md` Part 1「オーナー（社長）の位置づけ」「社長の SNS（Bluesky）について」を参照
 6. **簡素記法ブロックの自己チェック**: シーンを書き終えるたびに `balloon-html.md` 「書き手向けチェックリスト」を確認する（H2 直前の閉じ忘れ / 入れ子禁止 等）。記事全体を書き終えてからまとめてチェックすると修正箇所が散らばるため、シーン単位で確認する
-7. **セクション配置の順序**: タイトル H1 の直下に **登場人物セクション** を置き、続いて本文の H2 シーン、記事末尾に **プロジェクトの説明セクション** を置く。順序の SSoT は `template-diary.md` 「セクション配置の順序」を参照
+7. **セクション配置の順序**: タイトル H1 の直下に **登場人物セクション** を置き、続いて本文の H2 シーン、記事末尾に **プロジェクトの説明セクション** を置く。順序の SSoT は `template-diary.md` 冒頭の構造リストを参照
 8. **登場人物セクション** をタイトル H1 直下に挿入する（言及リポ・対話シーン数に関わらず常に挿入）。固定 HTML 文言と置換ルールの SSoT は `template-diary.md` 「登場人物セクション」（マーカー全置換義務・字数・改変禁止範囲を含む）。置換内容の方針は `quality-guidelines.md` Part 1「登場人物セクションの一言」を参照
 9. **プロジェクトの説明セクション** を記事末尾に挿入する（言及リポの有無に関わらず常に挿入）。セクション構造とテーブル絞り込みルールは `template-diary.md` 「リポジトリマスターテーブル」「プロジェクトの説明セクション」を参照
 
 ### Phase 5: ファイル出力（当該日 `d`）
 
-1. **slug 生成**: Phase 4 で確定した記事タイトル（日本語）を英訳しハイフン区切りに整形。**slug には日付を含めない**（日付はファイル名先頭部分で表現済み）。例: 「ジャーナル機能の追加とリポ呼称ルールの整備」→ `journal-feature-and-repo-alias-rules`
-2. **出力先パス**: `articles/hatena/{d}-{HH-MM-SS}-{slug}.md`
-   - `{d}` は当該記事の日記対象日
-   - `{HH-MM-SS}` は **本記事の Write 直前に取得するローカル時刻**（`date +%H-%M-%S` 相当。連続生成でも各記事ごとに取得することで秒単位で衝突しない）
-3. ディレクトリが存在しなければ作成
-4. **新規作成のため Write を使用**。最初から最終稿の場所で編集する（中間ドラフトを別ディレクトリに置かない）
+1 日 1 記事を前提とした命名で、`published.jsonl` の重複検知（`date:` キー）と整合する。
+
+1. **出力先パス**: `articles/hatena/{YYYY-MM-DD}-diary.md`
+2. ディレクトリが存在しなければ作成
+3. **新規作成のため Write を使用**
+4. 同名ファイルが既に存在する場合はエラー停止
 5. 生成済みパスを `GENERATED_PATHS` リストに追加
 
 ### Phase 5.5: レビュー自動呼び出し（当該日 `d`）
@@ -167,22 +167,22 @@ Phase 5 で当該日の記事を Write した直後、本ステップで `/revie
 
 ### Phase 6: 後処理（ループ後にまとめて 1 回）
 
-`articles/hatena/**` は markdownlint の対象外（`template-diary.md` 「記法ポリシー」セクション参照）のため、本 Phase では lint を実行しない。エディタオープンと完了メッセージ表示のみを行う。
+`articles/hatena/**` は markdownlint の対象外のため、本 Phase では lint を実行しない。エディタオープンと完了メッセージ表示のみを行う。
 
 1. `code "<絶対パス1>" "<絶対パス2>" ...` でまとめてエディタを起動（PATH 不通時はサイレントスキップ）
 2. 完了メッセージ。単一記事の場合:
 
    ```text
-   ✅ 日記を生成しました: articles/hatena/2026-05-13-114600-journal-feature-and-repo-alias-rules.md
+   ✅ 日記を生成しました: articles/hatena/2026-05-13-diary.md
    ```
 
    複数記事の場合（範囲指定）:
 
    ```text
    ✅ 日記を 3 記事生成しました:
-     - articles/hatena/2026-05-10-114600-journal-feature-and-repo-alias-rules.md
-     - articles/hatena/2026-05-11-114602-template-refresh-doc-overhaul.md
-     - articles/hatena/2026-05-12-114604-diary-skill-design.md
+     - articles/hatena/2026-05-10-diary.md
+     - articles/hatena/2026-05-12-diary.md
+     - articles/hatena/2026-05-13-diary.md
    ```
 
    スキップ日があれば末尾に併記する（例: `（2026-05-11 はジャーナルなしでスキップ）`）
@@ -221,11 +221,7 @@ Phase 5 で当該日の記事を Write した直後、本ステップで `/revie
 
 ## 記法ポリシー
 
-詳細は `template-diary.md` の「記法ポリシー」セクションを SSoT とする。要点のみ再掲:
-
-- GitHub-flavored Markdown（GFM）のみで記述。はてな記法は不使用
-- 絵文字は Unicode 直接記述（ショートコード形式は不使用）
-- 運用前提: はてなブログ側のデフォルト編集モードを「Markdown」に設定しておく必要がある
+詳細は `quality-guidelines.md` Part 2「記法」を SSoT とする。
 
 ## NFR と将来拡張
 

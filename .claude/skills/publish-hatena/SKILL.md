@@ -20,7 +20,7 @@ argument-hint: "[YYYY-MM-DD] [--force]"
 
 - **引数なし**: `articles/hatena/` 配下のファイル名順で最新のファイルを対象とする
 - **`YYYY-MM-DD`**: ファイル名がこの日付で始まる記事を対象とする。同日複数あれば最新を選択
-- **`--force`**: `published.jsonl` から対象日付の `edit_url` を取得し、AtomPub PUT で既存エントリを上書き更新する。`published.jsonl` には**追記しない**（既存行を保持）
+- **`--force`**: `published.jsonl` から対象日付の `edit_url` を取得し、AtomPub PUT で既存エントリを上書き更新する。`published.jsonl` の該当行の `title` を最新タイトルに更新する（`edit_url` は既存値を保持、行追加はしない）
   - 対象日付のエントリが `published.jsonl` に未登録の場合はエラー停止（`--force` は更新専用のため、新規投稿には使えない）
   - 対象日付のエントリは登録されているが `edit_url` が `null` の場合もエラー停止。手動で `edit_url` を URL 文字列に書き換えてから再実行する
 - 上記の組み合わせ可（例: `2026-05-13 --force`）
@@ -34,7 +34,7 @@ argument-hint: "[YYYY-MM-DD] [--force]"
 | `HATENA_ID` | リポジトリルートの `.env` | はてなのユーザー名（公開情報） |
 | `HATENA_BLOG_ID` | リポジトリルートの `.env` | ブログのホスト名（`<subdomain>.hatenablog.com` 形式、公開情報） |
 | `HATENA_API_KEY` | keyring（`service="article-writer"`） | AtomPub 用 API キー（秘匿情報。ダッシュボード → 設定 → 詳細設定 → AtomPub の「APIキー」） |
-| 投稿先ブログの編集モード | はてなブログの基本設定 | **Markdown** に設定済み（運用前提。詳細は `.claude/skills/write-hatena-diary/template-diary.md` の「記法ポリシー」を参照） |
+| 投稿先ブログの編集モード | はてなブログの基本設定 | **Markdown** に設定済み（運用前提。詳細は `.claude/skills/write-hatena-diary/quality-guidelines.md` Part 2「記法」を参照） |
 
 `.env` は `.gitignore` 済み。`HATENA_API_KEY` の値はオーナー手元のみで管理する秘匿情報で、本スキルから値を出力・記録しない。keyring 登録の具体コマンドは <<## エラーハンドリング一覧@self>> を参照。
 
@@ -99,7 +99,7 @@ python scripts/publish_hatena.py [<DATE>] [--force]
     - レスポンスの `<link rel="edit" href="..."/>` を抽出し `{"date": "<日付>", "title": "<title>", "edit_url": "<URL>"}` 形式で 1 行 JSON を追記する
     - `edit_url` 抽出に失敗した場合: WARNING を出して `"edit_url": null` で追記する（次回 `--force` 前に手動書き換えが必要、終了コード `0`）
     - 追記が I/O 失敗した場合: WARNING + 追記すべき 1 行を明示し終了コード `1`（投稿自体は成功している点を明示）
-12. PUT 成功時は `published.jsonl` への追記は行わない（既存行を保持）
+12. PUT 成功時は `published.jsonl` の該当行の `title` を最新タイトルに更新する（`edit_url` は既存値を保持、行追加はしない）
 13. レスポンスの `<link rel="alternate" href="..."/>`（公開閲覧 URL）と `<atom:id>` を画面表示する
 
 ### Phase 3: 結果報告
@@ -107,7 +107,7 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 スクリプトの出力をそのままユーザーに見せる。成功時の典型出力（POST）:
 
 ```text
-📄 対象記事: articles/hatena/YYYY-MM-DD-HHMMSS-<slug>.md
+📄 対象記事: articles/hatena/YYYY-MM-DD-diary.md
 📤 POST 中 (title: ...)
 ✅ 下書き登録成功
   記事: articles/hatena/...
@@ -120,13 +120,13 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 成功時の典型出力（`--force` での PUT）:
 
 ```text
-📄 対象記事: articles/hatena/YYYY-MM-DD-HHMMSS-<slug>.md
+📄 対象記事: articles/hatena/YYYY-MM-DD-diary.md
 🔄 PUT 中 (title: ...)
 ✅ 下書き更新成功
   記事: articles/hatena/...
   Entry ID: tag:blog.hatena.ne.jp,...:entry-...
   URL: https://<blog>/entry/...
-  published.jsonl は既存エントリを保持（--force による更新のため）
+  published.jsonl の title を最新タイトルに更新（edit_url は保持）
   管理画面: https://blog.hatena.ne.jp/<HATENA_ID>/<HATENA_BLOG_ID>/edit
 ```
 
@@ -169,6 +169,7 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 - `scripts/publish_hatena.py`: 投稿スクリプト本体
 - `scripts/convert_article_html.py`: 簡素記法 → HTML 変換（本スクリプトが投稿前に呼ぶ）
 - `.claude/skills/write-hatena-diary/SKILL.md`: 日記記事の生成スキル
-- `.claude/skills/write-hatena-diary/template-diary.md`: 記事テンプレート（フロントマター仕様・記法ポリシー）
+- `.claude/skills/write-hatena-diary/template-diary.md`: 記事テンプレート（フロントマター・固定 HTML・参照データ）
+- `.claude/skills/write-hatena-diary/quality-guidelines.md`: 記法ポリシー含む品質ルール SSoT
 - `.claude/skills/write-hatena-diary/balloon-html.md`: 簡素記法仕様（吹き出し・Bluesky）
 - `articles/hatena/published.jsonl`: 公開済み記録（本スキルが追記する）

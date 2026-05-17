@@ -12,7 +12,7 @@
 6. keyring から HATENA_API_KEY を取得（service="article-writer"）
 7. AtomPub Atom Entry XML を組み立て（`<title>` / `<updated>` / `<content type="text/x-markdown">` / `<app:draft>yes</app:draft>` / `<category>`）
 8. Basic 認証で --force なしは POST、--force ありは既存 edit_url へ PUT
-9. POST 成功時 published.jsonl に 1 行 JSON を追記、PUT 成功時は既存行を保持
+9. POST 成功時 published.jsonl に 1 行 JSON を追記、PUT 成功時は title を最新タイトルに更新（edit_url 保持）
 
 使用例:
 
@@ -108,33 +108,36 @@ def get_secret(key: str) -> str:
     return value
 
 
-_ARTICLE_NAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-")
+_ARTICLE_NAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-diary\.md$")
 
 
 def select_article(date: str | None) -> pathlib.Path:
     """対象記事を選ぶ. date 指定時は前方一致、未指定時はファイル名順で最新.
 
-    ファイル名は `YYYY-MM-DD-HH-MM-SS-<slug>.md` 形式（write-hatena-diary 仕様）のため、
-    辞書順ソートで時系列順になる。mtime ではなくファイル名でソートするのは、
-    `touch` 等で mtime が書き換わっても選択結果が安定するため。
+    ファイル名は `YYYY-MM-DD-diary.md` 形式（write-hatena-diary 仕様）のため、
+    辞書順ソートで日付順になる。
 
     日付プレフィックスを持たない補助ファイル（README.md 等）は候補から除外する。
+
+    ファイル名の `\\d{4}-\\d{2}-\\d{2}` は厳密な日付（年月日の値域）として検証しない。
+    実際の日付一致は frontmatter `date:` に対する検証で担保する。
     """
     if not ARTICLES_DIR.exists():
         raise SystemExit(f"記事ディレクトリが存在しません: {ARTICLES_DIR}")
+    # `*.md` glob で OS 側に拡張子フィルタを掛けて候補を絞り、正規表現で `YYYY-MM-DD-diary.md` 形式を確定する
     candidates = sorted(
         p for p in ARTICLES_DIR.glob("*.md") if _ARTICLE_NAME_RE.match(p.name)
     )
     if not candidates:
         raise SystemExit(
-            f"対象記事がありません: {ARTICLES_DIR}/YYYY-MM-DD-HH-MM-SS-*.md"
+            f"対象記事がありません: {ARTICLES_DIR.as_posix()}/YYYY-MM-DD-diary.md"
         )
     if date:
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
             raise SystemExit(f"日付形式が不正です（YYYY-MM-DD で指定）: '{date}'")
         matched = [p for p in candidates if p.name.startswith(date)]
         if not matched:
-            raise SystemExit(f"日付 {date} に対応する記事がありません: {ARTICLES_DIR}")
+            raise SystemExit(f"日付 {date} に対応する記事がありません: {ARTICLES_DIR.as_posix()}")
         return matched[-1]
     return candidates[-1]
 
@@ -363,6 +366,40 @@ def append_published(diary_date: str, title: str, edit_url: str | None) -> None:
         f.write(line)
 
 
+def update_published_title(diary_date: str, title: str) -> bool:
+    """published.jsonl 内の指定日付エントリの title を最新タイトルに更新する.
+
+    PUT (--force) 時に最新タイトルへ追従させるため使用する。
+    edit_url は既存値を保持する。
+
+    Returns:
+        True: 該当エントリが見つかり更新成功
+        False: 該当エントリが見つからない
+    """
+    if not PUBLISHED_JSONL.exists():
+        return False
+    lines = PUBLISHED_JSONL.read_text(encoding="utf-8").splitlines()
+    updated = False
+    out_lines: list[str] = []
+    for line in lines:
+        if not line.strip():
+            out_lines.append(line)
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            out_lines.append(line)
+            continue
+        if obj.get("date") == diary_date:
+            obj["title"] = title
+            line = json.dumps(obj, ensure_ascii=False)
+            updated = True
+        out_lines.append(line)
+    if updated:
+        PUBLISHED_JSONL.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    return updated
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="生成済みの日記記事を AtomPub で下書き登録する",
@@ -486,7 +523,13 @@ def main(argv: list[str] | None = None) -> int:
 
     append_failed = False
     if args.force:
-        print("  published.jsonl は既存エントリを保持（--force による更新のため）")
+        if update_published_title(diary_date, title):
+            print("  published.jsonl の title を最新タイトルに更新（edit_url は保持）")
+        else:
+            print(
+                "  ⚠️ published.jsonl に該当エントリが見つからず title 更新をスキップしました",
+                file=sys.stderr,
+            )
     else:
         try:
             append_published(diary_date, title, edit_url)

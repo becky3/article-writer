@@ -170,23 +170,23 @@ class SelectArticleTest(unittest.TestCase):
     def test_non_dated_files_excluded(self) -> None:
         # README.md 等の日付プレフィックスを持たないファイルは候補に含めない
         self._touch("README.md")
-        self._touch("2026-05-13-09-00-00-foo.md")
+        self._touch("2026-05-13-diary.md")
         result = publish_hatena.select_article(None)
-        self.assertEqual(result.name, "2026-05-13-09-00-00-foo.md")
+        self.assertEqual(result.name, "2026-05-13-diary.md")
 
     def test_latest_by_filename(self) -> None:
-        # ファイル名昇順で最新を返す
-        self._touch("2026-05-12-08-00-00-old.md")
-        self._touch("2026-05-13-09-00-00-new.md")
+        # ファイル名昇順で最新を返す（1 日 1 記事前提のため日付で順序が決まる）
+        self._touch("2026-05-12-diary.md")
+        self._touch("2026-05-13-diary.md")
         result = publish_hatena.select_article(None)
-        self.assertEqual(result.name, "2026-05-13-09-00-00-new.md")
+        self.assertEqual(result.name, "2026-05-13-diary.md")
 
     def test_date_prefix_filter(self) -> None:
-        # date 指定時は前方一致で絞り込む
-        self._touch("2026-05-12-08-00-00-old.md")
-        self._touch("2026-05-13-09-00-00-new.md")
+        # date 指定時は前方一致で絞り込む（1 日 1 記事前提）
+        self._touch("2026-05-12-diary.md")
+        self._touch("2026-05-13-diary.md")
         result = publish_hatena.select_article("2026-05-12")
-        self.assertEqual(result.name, "2026-05-12-08-00-00-old.md")
+        self.assertEqual(result.name, "2026-05-12-diary.md")
 
     def test_no_articles_raises(self) -> None:
         self._touch("README.md")  # 日付プレフィックスなしのみ
