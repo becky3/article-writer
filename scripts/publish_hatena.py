@@ -25,9 +25,11 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import pathlib
 import re
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -405,8 +407,22 @@ def update_published_title(diary_date: str, title: str) -> bool:
             updated = True
         out_lines.append(line)
     if updated:
+        # 同一ディレクトリのテンポラリファイルに書き出してから atomic rename で置き換える。
+        # 書き込み途中のプロセス中断・ディスクフル等でも、元ファイルの完全性を保つ。
         try:
-            PUBLISHED_JSONL.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                prefix=".published.jsonl.", dir=PUBLISHED_JSONL.parent
+            )
+            try:
+                with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+                    f.write("\n".join(out_lines) + "\n")
+                os.replace(tmp_path, PUBLISHED_JSONL)
+            except OSError:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
         except OSError as e:
             print(f"  ⚠️ published.jsonl の書き込みに失敗: {e}", file=sys.stderr)
             return False
