@@ -4,8 +4,10 @@
 
 対象記法:
 
-- ``:::kuro-chan`` / ``:::nee-san`` … 吹き出し（balloon-l / balloon-r）
-- ``:::bluesky`` … Bluesky 投稿の埋め込みカード
+- ``kuro-chan>>...`` / ``nee-san>>...`` … 吹き出し（balloon-l / balloon-r）。
+  行頭マーカーから行末までを 1 セリフとする単行記法
+- ``{{{bluesky`` 〜 ``}}}`` … Bluesky 投稿の埋め込みカード。
+  非対称マーカーで閉じ忘れを視覚的に防ぐフェンス形式
 
 使用例:
 
@@ -25,17 +27,25 @@ import pathlib
 import re
 import sys
 
-BALLOON_OPEN_RE = re.compile(r"^:::(kuro-chan|nee-san)\s*$")
-BLUESKY_OPEN_RE = re.compile(r"^:::bluesky\s*$")
-FENCE_CLOSE_RE = re.compile(r"^:::\s*$")
-ANY_OPEN_RE = re.compile(r"^:::[A-Za-z]")
+from article_syntax import (
+    BALLOON_MARKER_SUFFIX,
+    BALLOON_NAME_TO_SIDE,
+    BLUESKY_CLOSE_TOKEN,
+    BLUESKY_OPEN_TOKEN,
+)
 
-# キャラ名 → CSS 側 (l/r) のマッピング。CSS クラス名 balloon-l / balloon-r は変えず、
-# 入力記法だけキャラ名直結にする方針（マーカーがキャラ取り違えを誘発しないため）。
-BALLOON_NAME_TO_SIDE = {
-    "kuro-chan": "l",
-    "nee-san": "r",
-}
+_BALLOON_NAMES_RE = "|".join(re.escape(n) for n in BALLOON_NAME_TO_SIDE)
+_BALLOON_MARKER_RE = re.escape(BALLOON_MARKER_SUFFIX)
+_BLUESKY_OPEN_RE = re.escape(BLUESKY_OPEN_TOKEN)
+_BLUESKY_CLOSE_RE = re.escape(BLUESKY_CLOSE_TOKEN)
+
+BALLOON_LINE_RE = re.compile(rf"^({_BALLOON_NAMES_RE}){_BALLOON_MARKER_RE}\s*(.*)$")
+BLUESKY_OPEN_RE = re.compile(rf"^{_BLUESKY_OPEN_RE}\s*$")
+BLUESKY_CLOSE_RE = re.compile(rf"^{_BLUESKY_CLOSE_RE}\s*$")
+# bluesky ブロック内に balloon / bluesky の開始行が現れた場合の入れ子検知用
+ANY_OPEN_RE = re.compile(
+    rf"^({_BLUESKY_OPEN_RE}|(?:{_BALLOON_NAMES_RE}){_BALLOON_MARKER_RE})"
+)
 # balloon 本文内の Markdown 風インラインコード（`...`）を <code>...</code> に
 # 自動置換するための正規表現。
 # balloon は HTML の <div> 内に展開され Markdown が効かないため、書き手の
@@ -76,8 +86,9 @@ def _normalize_did(value: str) -> str:
 def build_balloon(side: str, body_text: str) -> str:
     """balloon HTML を組み立てる.
 
-    ``side`` は ``"l"`` または ``"r"``。``body_text`` は改行を半角スペースに圧縮した上で
-    ``<div class="text">`` の中に入れる。本文は HTML 直書きとして扱うため、エスケープしない。
+    ``side`` は ``"l"`` または ``"r"``。``body_text`` は単行マーカーから取り出した
+    1 行のテキスト。``<div class="text">`` の中に入れる。本文は HTML 直書きとして
+    扱うため、エスケープしない。長文の疑似改行は書き手側で ``<br/>`` を入れる。
 
     balloon 内の Markdown 風インラインコード（``` `name` ``` 形式）は ``<code>name</code>``
     に自動置換する。これにより書き手は balloon の内外を問わず同じ書き方
@@ -98,7 +109,7 @@ def build_balloon(side: str, body_text: str) -> str:
     退避により装飾置換から保護される）。アンダースコア形式（``__bold__`` /
     ``_italic_``）は日本語混じり文での誤爆リスクが高いため非対応。
     """
-    compact = re.sub(r"\s*\n\s*", " ", body_text.strip())
+    compact = body_text.strip()
     compact = BALLOON_INLINE_CODE_RE.sub(r"<code>\1</code>", compact)
     code_segments: list[str] = []
 
@@ -156,7 +167,7 @@ def build_bluesky(fields: dict[str, str]) -> str:
 
 
 def _parse_bluesky_fields(lines: list[str], block_start_lineno: int) -> dict[str, str]:
-    """``:::bluesky`` ブロック内の key=value 行群をパースして dict にする.
+    """``{{{bluesky`` ブロック内の key=value 行群をパースして dict にする.
 
     ``text=`` は ``text=`` 行以降、ブロック終端までを連結して値とする（複数行 text 対応）。
     必須キーの欠落・未知キーは ``ConvertError`` で停止する。
@@ -184,6 +195,11 @@ def _parse_bluesky_fields(lines: list[str], block_start_lineno: int) -> dict[str
             fields[key] = value
     if text_lines is not None:
         fields["text"] = "\n".join(text_lines)
+    elif "text" not in fields:
+        raise ConvertError(
+            f"行 {block_start_lineno}: bluesky ブロックに 'text=' キーが見つかりません。"
+            "'text=' はブロック内の最後のキーとして配置してください",
+        )
     missing = [k for k in REQUIRED_BLUESKY_KEYS if k not in fields]
     if missing:
         raise ConvertError(
@@ -207,46 +223,37 @@ def convert(text: str) -> str:
     n = len(lines)
     while i < n:
         line = lines[i]
-        balloon_match = BALLOON_OPEN_RE.match(line)
+        balloon_match = BALLOON_LINE_RE.match(line)
         bluesky_match = BLUESKY_OPEN_RE.match(line)
         if balloon_match:
             name = balloon_match.group(1)
+            body = balloon_match.group(2)
             side = BALLOON_NAME_TO_SIDE[name]
-            block_start = i + 1
+            out.append(build_balloon(side, body))
+            i += 1
+            continue
+        if BLUESKY_CLOSE_RE.match(line):
+            raise ConvertError(
+                f"行 {i + 1}: 孤立した {BLUESKY_CLOSE_TOKEN} を検出。"
+                f"対応する {BLUESKY_OPEN_TOKEN} がありません",
+            )
+        if bluesky_match:
+            bluesky_open_lineno = i + 1
             body_lines: list[str] = []
             j = i + 1
-            while j < n and not FENCE_CLOSE_RE.match(lines[j]):
+            while j < n and not BLUESKY_CLOSE_RE.match(lines[j]):
                 if ANY_OPEN_RE.match(lines[j]):
                     raise ConvertError(
-                        f"行 {j + 1}: balloon ブロック内に別の ::: ブロック開始: {lines[j]!r}"
-                        f"（入れ子は未サポート）",
-                    )
-                body_lines.append(lines[j])
-                j += 1
-            if j >= n:
-                raise ConvertError(
-                    f"行 {block_start}: :::{name} ブロックが閉じられていません",
-                )
-            out.append(build_balloon(side, "\n".join(body_lines)))
-            i = j + 1
-            continue
-        if bluesky_match:
-            block_start = i + 1
-            body_lines = []
-            j = i + 1
-            while j < n and not FENCE_CLOSE_RE.match(lines[j]):
-                if ANY_OPEN_RE.match(lines[j]):
-                    raise ConvertError(
-                        f"行 {j + 1}: bluesky ブロック内に別の ::: ブロック開始: "
+                        f"行 {j + 1}: bluesky ブロック内に別のブロック開始: "
                         f"{lines[j]!r}（入れ子は未サポート）",
                     )
                 body_lines.append(lines[j])
                 j += 1
             if j >= n:
                 raise ConvertError(
-                    f"行 {block_start}: :::bluesky ブロックが閉じられていません",
+                    f"行 {bluesky_open_lineno}: {BLUESKY_OPEN_TOKEN} ブロックが閉じられていません",
                 )
-            fields = _parse_bluesky_fields(body_lines, block_start)
+            fields = _parse_bluesky_fields(body_lines, bluesky_open_lineno)
             out.append(build_bluesky(fields))
             i = j + 1
             continue
