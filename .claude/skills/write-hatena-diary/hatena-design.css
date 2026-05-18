@@ -121,3 +121,29 @@
   font-size: 0.9em;
   line-height: 1.5;
 }
+
+/*
+ * スマホ表示時の調整
+ *
+ * はてなブログのスマホテーマは PC 用デザイン CSS を読み込まない仕様のため、
+ * 本ファイル全体をスマホ用ヘッダ HTML にも <style>...</style> で囲んで貼り付ける必要がある
+ * （ファイル冒頭コメント参照）。本セクションは PC 表示では @media により無効化される。
+ *
+ * .balloon .text の左右マージンは、対向のアイコン列の幅と gap の合計に揃えて、
+ * バルーン開始位置を左右で揃える設計。値を変える際は両方を同じ値で更新する。
+ */
+@media (max-width: 600px) {
+  .balloon .icon {
+    width: 44px;
+    height: 44px;
+  }
+  .balloon-l .text {
+    margin-right: 56px;
+  }
+  .balloon-r .text {
+    margin-left: 56px;
+  }
+  .balloon .text {
+    max-width: none;
+  }
+}

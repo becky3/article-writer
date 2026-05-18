@@ -83,7 +83,7 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 
     **`format="original"` 指定必須**（デフォルトの `format="text"` では本文以外のメタデータが失われ、`cid` 等が取得できない）。
 
-    取得した JSON から以下のフィールドを抽出して Phase 4 で `:::bluesky` 簡素記法ブロックの key=value 値として埋め込む:
+    取得した JSON から以下のフィールドを抽出して Phase 4 で `{{{bluesky ... }}}` 簡素記法ブロックの key=value 値として埋め込む:
 
     | キー | JSON パス |
     |---|---|
@@ -94,7 +94,7 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
     | `display-name` | `post.author.displayName` |
     | `created-at` | `post.record.createdAt` |
     | `text` | `post.record.text` |
-    | `lang` | `post.record.langs[0]`（任意。省略時は `:::bluesky` 側のデフォルト `ja` が適用される） |
+    | `lang` | `post.record.langs[0]`（任意。省略時は `{{{bluesky ... }}}` 側のデフォルト `ja` が適用される） |
 
 ### Phase 2.5: ループ前準備（共通リソース読み込み）
 
@@ -127,12 +127,12 @@ argument-hint: "[YYYY-MM-DD] or [MM-DD] or [<日付>..<日付>]"
 1. **本文の構成・口調・展開は `quality-guidelines.md` Part 1（物語世界）を制御点として書き手の裁量に任せる**。固定セクション・必須サブセクションは設けない
 2. **タイトル** の文字列は `quality-guidelines.md` Part 2「タイトル」の方針に従って決め、フロントマター `title:` と本文 H1 を一致させる
 3. **リポを言及する箇所では `name` を backtick 付きで本文に直接書く**（例: `` `rag-knowledge` ``、`` `article-writer` ``）。`becky3/<name>` 形式・`#<番号>` 形式（Issue / PR）は使わない
-4. **吹き出し** は `:::kuro-chan` / `:::nee-san` の簡素記法で書く。記法仕様は `balloon-html.md` を参照。HTML タグ（`<div class="balloon">` 等）を直接書かない
-5. **Bluesky 引用部** は `:::bluesky` 簡素記法で書く
+4. **吹き出し** は `kuro-chan>>...` / `nee-san>>...` の単行マーカー記法で書く。記法仕様は `balloon-html.md` を参照。HTML タグ（`<div class="balloon">` 等）を直接書かない
+5. **Bluesky 引用部** は `{{{bluesky ... }}}` のフェンス記法で書く
     - 記法仕様: `balloon-html.md` 「Bluesky 記法」
     - メタデータ: Phase 2 で取得した key=value 形式（`did` / `cid` / `rkey` / `handle` / `display-name` / `created-at` / `text`、`lang` は任意）
     - 引用部の前提・関係性: `quality-guidelines.md` Part 1「オーナー（社長）の位置づけ」「社長の SNS（Bluesky）について」を参照
-6. **簡素記法ブロックの自己チェック**: シーンを書き終えるたびに `balloon-html.md` 「書き手向けチェックリスト」を確認する（H2 直前の閉じ忘れ / 入れ子禁止 等）。記事全体を書き終えてからまとめてチェックすると修正箇所が散らばるため、シーン単位で確認する
+6. **簡素記法ブロックの自己チェック**: シーンを書き終えるたびに `balloon-html.md` 「書き手向けチェックリスト」を確認する（balloon の 1 行 1 セリフ / bluesky フェンスの閉じ `}}}` / 入れ子禁止 等）。記事全体を書き終えてからまとめてチェックすると修正箇所が散らばるため、シーン単位で確認する
 7. **セクション配置の順序**: タイトル H1 の直下に **登場人物セクション** を置き、続いて本文の H2 シーン、記事末尾に **プロジェクトの説明セクション** を置く。順序の SSoT は `template-diary.md` 冒頭の構造リストを参照
 8. **登場人物セクション** をタイトル H1 直下に挿入する（言及リポ・対話シーン数に関わらず常に挿入）。固定 HTML 文言と置換ルールの SSoT は `template-diary.md` 「登場人物セクション」（マーカー全置換義務・字数・改変禁止範囲を含む）。置換内容の方針は `quality-guidelines.md` Part 1「登場人物セクションの一言」を参照
 9. **プロジェクトの説明セクション** を記事末尾に挿入する（言及リポの有無に関わらず常に挿入）。セクション構造とテーブル絞り込みルールは `template-diary.md` 「リポジトリマスターテーブル」「プロジェクトの説明セクション」を参照

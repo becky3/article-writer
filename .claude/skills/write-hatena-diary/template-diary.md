@@ -108,7 +108,7 @@ category: "diary"
 ## Bluesky 引用ブロック雛形
 
 ```markdown
-:::bluesky
+{{{bluesky
 did=...
 cid=...
 rkey=...
@@ -116,9 +116,11 @@ handle=...
 display-name=...
 created-at=...
 text=投稿本文
-:::
+}}}
 
 {ペルソナのコメント}
 ```
+
+各 `...` プレースホルダは Phase 2 で取得した実値に置換する（`did` `cid` `rkey` `handle` `display-name` `created-at` `text`）。雛形をそのまま貼り付けて `...` がリテラルとして残らないよう注意する。
 
 記法仕様は `balloon-html.md` の「Bluesky 記法」を SSoT として参照する。
