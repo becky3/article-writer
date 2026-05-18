@@ -198,7 +198,7 @@ def _parse_bluesky_fields(lines: list[str], block_start_lineno: int) -> dict[str
     elif "text" not in fields:
         raise ConvertError(
             f"行 {block_start_lineno}: bluesky ブロックに 'text=' キーが見つかりません。"
-            "'text=' はブロック内の最後のキーとして配置してください",
+            " 'text=' はブロック内の最後のキーとして配置してください",
         )
     missing = [k for k in REQUIRED_BLUESKY_KEYS if k not in fields]
     if missing:
@@ -241,12 +241,16 @@ def convert(text: str) -> str:
             bluesky_open_lineno = i + 1
             body_lines: list[str] = []
             j = i + 1
+            text_started = False
             while j < n and not BLUESKY_CLOSE_RE.match(lines[j]):
-                if ANY_OPEN_RE.match(lines[j]):
-                    raise ConvertError(
-                        f"行 {j + 1}: bluesky ブロック内に別のブロック開始: "
-                        f"{lines[j]!r}（入れ子は未サポート）",
-                    )
+                if not text_started:
+                    if ANY_OPEN_RE.match(lines[j]):
+                        raise ConvertError(
+                            f"行 {j + 1}: bluesky ブロック内に別のブロック開始: "
+                            f"{lines[j]!r}（入れ子は未サポート）",
+                        )
+                    if lines[j].startswith("text="):
+                        text_started = True
                 body_lines.append(lines[j])
                 j += 1
             if j >= n:

@@ -421,6 +421,29 @@ class BlueskyConvertTest(unittest.TestCase):
         with self.assertRaises(convert_article_html.ConvertError):
             convert_article_html.convert(block)
 
+    def test_bluesky_text_containing_balloon_marker_is_not_treated_as_nested(self) -> None:
+        # text= 行以降の値部分は入れ子検知の対象外。Bluesky 投稿本文に
+        # balloon マーカー文字列や {{{bluesky が含まれていても text 値として通過する。
+        block = (
+            f"{BLUESKY_OPEN_TOKEN}\n"
+            "did=did:plc:abc\n"
+            "cid=bafyabc\n"
+            "rkey=3xyz\n"
+            "handle=h.bsky.social\n"
+            "display-name=name\n"
+            "created-at=2026-05-14T00:00:00Z\n"
+            "text=以下は引用です\n"
+            "kuro-chan>>これは Bluesky の投稿本文の一部であって balloon ではない\n"
+            "{{{bluesky の説明をしている文章\n"
+            f"{BLUESKY_CLOSE_TOKEN}\n"
+        )
+        # 入れ子検知が発火しないこと（例外を投げず正常に変換できること）
+        out = convert_article_html.convert(block)
+        self.assertIn('class="bluesky-embed"', out)
+        # 本文文字列が HTML エスケープされて含まれること
+        self.assertIn("kuro-chan&gt;&gt;", out)
+        self.assertIn("{{{bluesky", out)
+
     def test_isolated_close_token_raises(self) -> None:
         # 対応する {{{bluesky のない孤立した }}} が地の文に出現したらエラー停止。
         # 書き手が開きマーカーを `{{bluesky`（{ 2 個）と誤記したケースを検出するため。
