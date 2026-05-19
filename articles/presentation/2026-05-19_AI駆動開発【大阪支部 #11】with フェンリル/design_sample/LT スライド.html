@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Claude Code 個人開発 3 ヶ月 — LT 2026-05-17</title>
+<meta name="viewport" content="width=1920">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400;1,600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="styles.css">
+
+<script src="deck-stage.js"></script>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<deck-stage>
+
+<!-- ============================================================
+     S 1 / COVER
+     ============================================================ -->
+<section data-screen-label="01 Cover" class="slide-cover">
+  <div class="cover-body">
+    <div class="cover-mark">
+      <div class="sigil"></div>
+      <span>Claude Code · 個人開発 ジャーナル</span>
+    </div>
+    <h1 class="cover-title">
+      Claude Code で<br>個人開発、<em>3 ヶ月</em>
+    </h1>
+    <p class="cover-sub">— ハーネスを作って壊した記録</p>
+    <dl class="cover-meta">
+      <div>
+        <dt>Speaker</dt>
+        <dd>木部 暁 (Satoru Kibe)</dd>
+      </div>
+      <div>
+        <dt>Event</dt>
+        <dd>LT — 2026 / 05 / 17</dd>
+      </div>
+      <div>
+        <dt>Repos</dt>
+        <dd>5 / PRs 929 / +135,062 LOC</dd>
+      </div>
+    </dl>
+  </div>
+</section>
+
+<!-- ============================================================
+     S 2 / 自己紹介
+     ============================================================ -->
+<section data-screen-label="02 自己紹介">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">Claude Code 個人開発 3 ヶ月</span><span class="chrome-spacer"></span><span>自己紹介</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">about — 自己紹介</div>
+    <h2 class="s-title">木部 暁<span class="sub">きべ さとる</span></h2>
+    <div class="s-rule"></div>
+    <ul class="dots" style="max-width:1500px;">
+      <li><strong>20 年以上</strong>のソフトウェア開発実務</li>
+      <li>直近 2 年はメタバース / ゲーム（<strong>UE5 / Blueprint</strong>）</li>
+      <li>2026 年から「<strong class="accent">準 LLM 無職</strong>」状態で Claude Code に没頭</li>
+      <li>AI 開発領域へキャリアを拡げる学習中</li>
+    </ul>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">02</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 3 / 今日話すこと
+     ============================================================ -->
+<section data-screen-label="03 今日話すこと">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">Claude Code 個人開発 3 ヶ月</span><span class="chrome-spacer"></span><span>Agenda</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">agenda — 今日話すこと</div>
+    <h2 class="s-title">3 つの軸で話します</h2>
+    <div class="s-rule"></div>
+    <div class="split2" style="grid-template-columns:0.7fr 1.3fr;">
+      <div>
+        <ol class="steps">
+          <li><span class="step-n">1</span><span class="step-t">AI 駆動で開発した主な<strong>プロジェクトの紹介</strong></span></li>
+          <li><span class="step-n">2</span><span class="step-t"><strong>ハーネスエンジニアリング</strong>の変遷</span></li>
+          <li><span class="step-n">3</span><span class="step-t"><strong>workflow と主要スキル</strong></span></li>
+        </ol>
+      </div>
+      <div>
+        <div class="callout">
+          <div class="lede">用語</div>
+          「<strong>ハーネスエンジニアリング</strong>」=<br>
+          Claude Code の挙動を制御する周辺装置<br>
+          （<em>スキル / ルール / Hook / エージェント定義</em>）を<br>
+          設計・改善していく開発活動
+        </div>
+        <p style="font-size:40px;color:var(--ink-mute);line-height:1.45;margin-top:20px;">
+          開発は <strong class="accent">仕様駆動</strong>
+          （先に仕様書を書いて、実装は AI に任せる）で進めている
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">03</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 4 / やったことざっくり
+     ============================================================ -->
+<section data-screen-label="04 やったことざっくり">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">Claude Code 個人開発 3 ヶ月</span><span class="chrome-spacer"></span><span>Results</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">results — やったことざっくり</div>
+    <h2 class="s-title">コードは 1 行も自分で書かず<span class="sub">ドキュメントもほぼ全任せ — 3 ヶ月の成果</span></h2>
+    <div class="s-rule"></div>
+    <div class="split2 weight-lr">
+      <div>
+        <table>
+          <thead>
+            <tr>
+              <th>リポジトリ</th>
+              <th class="num">PR</th>
+              <th class="num">コミット</th>
+              <th class="num">行数</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="repo">agent-commons</td><td class="num">159</td><td class="num">488</td><td class="num">15,886</td></tr>
+            <tr><td class="repo">shared-workflows</td><td class="num">42</td><td class="num">115</td><td class="num">4,824</td></tr>
+            <tr><td class="repo">ai-assistant</td><td class="num">373</td><td class="num">1,262</td><td class="num">19,396</td></tr>
+            <tr><td class="repo">rag-knowledge</td><td class="num">332</td><td class="num">1,094</td><td class="num">88,958</td></tr>
+            <tr><td class="repo">article-writer</td><td class="num">23</td><td class="num">71</td><td class="num">5,998</td></tr>
+            <tr class="total"><td>合計</td><td class="num">929</td><td class="num">3,030</td><td class="num">135,062</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div class="stat-cards" style="grid-template-columns:1fr;gap:14px;">
+          <div class="stat-card">
+            <div class="k">最大の 1 日</div>
+            <div class="v">63 PR マージ</div>
+          </div>
+          <div class="stat-card" style="background:var(--bg-elev);border:1px solid var(--rule);">
+            <div class="k">体感</div>
+            <div class="v" style="font-size:42px;line-height:1.35;font-weight:500;">3 ヶ月の総量は、AI なしで業務開発<br>していた頃の自分の <span style="color:var(--accent-deep);font-weight:700;">1 年分</span>より<br>間違いなく多い</div>
+          </div>
+        </div>
+        <div class="callout" style="margin-top:24px;">
+          <div class="lede">caveat</div>
+          <strong>質は別として</strong>、AI なしでは<br>達成できなかった量
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">04</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 5 / CHAPTER 01
+     ============================================================ -->
+<section data-screen-label="05 章扉 01" class="slide-chapter">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">Claude Code 個人開発 3 ヶ月</span><span class="chrome-spacer"></span><span>Chapter 01</span></div>
+  <div class="chap-body">
+    <div class="chap-num">01</div>
+    <div class="chap-meta">
+      <div class="chap-label">Part one — Projects</div>
+      <h2 class="chap-title">AI 駆動で開発した<br>主なプロジェクトの紹介</h2>
+      <p class="chap-blurb">共通基盤 2 つ + 利用側 3 つ。<br>本 LT で言及するリポジトリの地図。</p>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">05</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 6 / プロジェクト地図
+     ============================================================ -->
+<section data-screen-label="06 プロジェクト地図">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ AI 駆動で開発した主なプロジェクトの紹介</span><span class="chrome-spacer"></span><span>map</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">project map — 5 リポジトリの地図</div>
+    <h2 class="s-title">共通基盤 2 + 利用側 3</h2>
+    <div class="s-rule"></div>
+
+    <div class="repo-group-h">共通基盤</div>
+    <div class="repo-grid">
+      <div class="repo-card">
+        <span class="tag">core</span>
+        <div>
+          <div class="name">agent-commons</div>
+          <div class="desc">スキル・ルール・Hook の本体<br>（共通参照元）</div>
+        </div>
+      </div>
+      <div class="repo-card">
+        <span class="tag">CI</span>
+        <div>
+          <div class="name">shared-workflows</div>
+          <div class="desc">GitHub Actions の<br>reusable workflow</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="repo-group-h">利用側</div>
+    <div class="repo-grid" style="grid-template-columns:1fr 1fr 1fr;">
+      <div class="repo-card" style="grid-template-columns:1fr;">
+        <span class="tag" style="justify-self:start;">app</span>
+        <div>
+          <div class="name">ai-assistant</div>
+          <div class="desc">Slack AI アシスタント +<br>スマホから Claude Code 起動</div>
+        </div>
+      </div>
+      <div class="repo-card" style="grid-template-columns:1fr;">
+        <span class="tag" style="justify-self:start;">data</span>
+        <div>
+          <div class="name">rag-knowledge</div>
+          <div class="desc">RAG ナレッジベース<br>（最大規模）</div>
+        </div>
+      </div>
+      <div class="repo-card" style="grid-template-columns:1fr;">
+        <span class="tag" style="justify-self:start;">skill</span>
+        <div>
+          <div class="name">article-writer</div>
+          <div class="desc">記事生成スキル</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">06</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 7 / agent-commons
+     ============================================================ -->
+<section data-screen-label="07 agent-commons">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ AI 駆動で開発した主なプロジェクトの紹介</span><span class="chrome-spacer"></span><span>agent-commons</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">project 01 / 5 — common harness</div>
+    <h2 class="s-title">agent-commons<span class="sub">ハーネスの本体</span></h2>
+    <div class="s-rule"></div>
+    <div class="split2">
+      <div>
+        <p style="font-size:52px;color:var(--ink-mute);line-height:1.4;">
+          以前は <code style="font-family:var(--font-mono);font-size:42px;color:var(--accent-deep);">ai-assistant/.claude/</code> に全部詰めていたが、<br>
+          複数リポジトリ運用でコピペ複製状態に<br>
+          → <strong class="accent">Claude Code の制御層を 1 リポジトリに集約</strong>
+        </p>
+        <pre class="flow" style="margin-top:16px;font-size:38px;">
+<span class="label">ローカル</span>  ~/.claude/  <span class="arrow">→</span>  symlink で参照
+<span class="label">CI</span>        GitHub Actions  <span class="arrow">→</span>  マージ
+<span class="note">1 箇所改修で、全リポジトリと CI に即時反映</span></pre>
+      </div>
+      <div>
+        <div class="col-h">集約しているもの</div>
+        <ul class="dots">
+          <li><strong>自作スキル群（10+ 個）</strong><ul><li>セッション開始から終了までの定型作業</li></ul></li>
+          <li><strong>ルール文書</strong><ul><li>コーディング規約・git 運用・仕様書スタイル等</li></ul></li>
+          <li><strong>Hook スクリプト</strong><ul><li>破壊的コマンドのブロック、PR 作成経路の制限など</li></ul></li>
+          <li><strong>エージェント定義</strong><ul><li>レビュー・計画立案・テスト実行の役割定義</li></ul></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">07</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 8 / shared-workflows
+     ============================================================ -->
+<section data-screen-label="08 shared-workflows">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ AI 駆動で開発した主なプロジェクトの紹介</span><span class="chrome-spacer"></span><span>shared-workflows</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">project 02 / 5 — CI</div>
+    <h2 class="s-title">shared-workflows<span class="sub">GitHub Actions 集約</span></h2>
+    <div class="s-rule"></div>
+    <p style="font-size:52px;color:var(--ink-mute);">複数リポジトリで使う GitHub Actions の処理を 1 リポジトリに集約</p>
+    <div class="col-h" style="margin-top:24px;">集約している処理（AI 連携系）</div>
+    <ul class="dots" style="max-width:1500px;">
+      <li><strong>AI 自動応答</strong>: Issue / PR で <code style="font-family:var(--font-mono);color:var(--accent-deep);">@claude</code> をメンションすると AI が応答</li>
+      <li><strong>AI 自動実装</strong>: 自動実装ラベルを付けた Issue を AI が実装 → PR 作成</li>
+      <li><strong>AI レビュー対応</strong>: Copilot レビューを受けて自動修正 → マージ</li>
+    </ul>
+    <div class="callout-soft" style="margin-top:24px;font-size:48px;line-height:1.4;">
+      各リポジトリは初期セットアップでこのリポジトリのワークフローを呼び出す形に。<br>
+      <strong>改修は 1 箇所で完結、全リポジトリに即時反映。</strong>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">08</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 9 / ai-assistant
+     ============================================================ -->
+<section data-screen-label="09 ai-assistant">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ AI 駆動で開発した主なプロジェクトの紹介</span><span class="chrome-spacer"></span><span>ai-assistant</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">project 03 / 5 — Slack agent</div>
+    <h2 class="s-title">ai-assistant<span class="sub">Slack AI アシスタント</span></h2>
+    <div class="s-rule"></div>
+    <p style="font-size:52px;color:var(--ink-mute);">Slack 経由で常駐する AI アシスタント</p>
+    <ul class="dots" style="max-width:1500px;margin-top:20px;">
+      <li><strong>RSS 自動収集・要約配信</strong>: 関心のあるサイトを定期巡回</li>
+      <li><strong>MCP 連携</strong>: 内部 RAG 検索ツールを Claude / Slack から呼べる</li>
+      <li><strong>Claude CLI モード</strong>: Slack チャットに Claude を呼ぶ</li>
+      <li><strong>Slack Remote Control</strong>: <code style="font-family:var(--font-mono);color:var(--accent-deep);font-size:48px;">@bot rc start &lt;repo&gt;</code> で<br>
+        <strong class="accent">スマホから Claude Code セッション起動</strong></li>
+    </ul>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">09</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 10 / rag-knowledge
+     ============================================================ -->
+<section data-screen-label="10 rag-knowledge">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ AI 駆動で開発した主なプロジェクトの紹介</span><span class="chrome-spacer"></span><span>rag-knowledge</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">project 04 / 5 — knowledge base</div>
+    <h2 class="s-title">rag-knowledge<span class="sub">RAG ナレッジベース — 最大規模</span></h2>
+    <div class="s-rule"></div>
+    <p style="font-size:52px;color:var(--ink-mute);">開発知見・記事・動画を蓄積する独立 MCP サーバー</p>
+    <ul class="dots" style="max-width:1500px;margin-top:20px;">
+      <li><strong>マルチソース対応</strong>: Web / Zenn / YouTube / PDF / Bluesky / 青空文庫 等</li>
+      <li><strong>ハイブリッド検索</strong>: ベクトル検索（ChromaDB）+ キーワード検索（BM25S）</li>
+      <li><strong>大規模クロール</strong>: Scrapy で並列処理</li>
+      <li><strong>外部 API を叩きすぎない仕組み</strong>: <em>コード内ハードリミット</em>で全アクセスを制御</li>
+    </ul>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">10</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 11 / article-writer
+     ============================================================ -->
+<section data-screen-label="11 article-writer">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ AI 駆動で開発した主なプロジェクトの紹介</span><span class="chrome-spacer"></span><span>article-writer</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">project 05 / 5 — writer</div>
+    <h2 class="s-title">article-writer<span class="sub">記事生成スキル</span></h2>
+    <div class="s-rule"></div>
+    <p style="font-size:52px;color:var(--ink-mute);">開発知見から技術記事を生成する Claude Code スキル群</p>
+    <ul class="dots" style="max-width:1500px;margin-top:20px;">
+      <li><code style="font-family:var(--font-mono);font-weight:700;color:var(--accent-deep);">/write-zenn</code> — Zenn 形式の技術記事を生成</li>
+      <li><code style="font-family:var(--font-mono);font-weight:700;color:var(--accent-deep);">/write-hatena-diary</code> — はてなブログ向け日記を生成</li>
+      <li><code style="font-family:var(--font-mono);font-weight:700;color:var(--accent-deep);">/publish-hatena</code> — AtomPub で下書き投稿</li>
+      <li><code style="font-family:var(--font-mono);font-weight:700;color:var(--accent-deep);">/multi-perspective-review</code> — 観点別エージェントを並列起動して記事をレビュー</li>
+    </ul>
+    <div class="callout-soft" style="margin-top:36px;max-width:1200px;">
+      ジャーナルを素材として記事化中
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">11</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 12 / CHAPTER 02
+     ============================================================ -->
+<section data-screen-label="12 章扉 02" class="slide-chapter">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">Claude Code 個人開発 3 ヶ月</span><span class="chrome-spacer"></span><span>Chapter 02</span></div>
+  <div class="chap-body">
+    <div class="chap-num">02</div>
+    <div class="chap-meta">
+      <div class="chap-label">Part two — Harness</div>
+      <h2 class="chap-title">ハーネスエンジニアリング<br>の変遷</h2>
+      <p class="chap-blurb">3 ヶ月で繰り返された構造 ——<br>「ルール」を強化するだけでは止まらず、<br>「仕組み」へ変換するパターンが出てきた。</p>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">12</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 13 / ハーネス変遷の構造
+     ============================================================ -->
+<section data-screen-label="13 ハーネス変遷の構造">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ ハーネスエンジニアリングの変遷</span><span class="chrome-spacer"></span><span>structure</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">recurring structure — 繰り返されたパターン</div>
+    <h2 class="s-title">壁 → 試行 → 解決<span class="sub">ルールではなく、仕組みに変換するという主題</span></h2>
+    <div class="s-rule"></div>
+    <div class="split2">
+      <div>
+        <pre class="flow" style="font-size:40px;line-height:1.65;">
+<span class="label">壁</span>     AI が指示文書（ルール）に従わない
+       <span class="arrow">↓</span>
+<span class="label">試行</span>  ルール文書を強化・追加
+       <span class="arrow">↓</span>  <span class="note">効かない</span>
+<span class="label">解決</span>  仕組みに変換
+       · Hook で物理的にブロック
+       · コード内ハードリミットで解除不能化
+       · 役割分離で実装と検証を分ける</pre>
+      </div>
+      <div>
+        <div class="callout">
+          <div class="lede">本 LT の主題</div>
+          <p style="font-size:60px;line-height:1.2;margin:0;">
+            <strong class="accent">ルール</strong>　vs　<strong class="accent">仕組み</strong>
+          </p>
+          <p style="font-size:42px;color:var(--ink-mute);line-height:1.4;margin-top:14px;">
+            指示を強化しても、AI のアクションが変わるとは限らない。<br>
+            手段そのものを構造に埋め込む方が確実だった。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">13</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 14 / Zenn 事件 ①
+     ============================================================ -->
+<section data-screen-label="14 Zenn事件①">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ ハーネスエンジニアリングの変遷</span><span class="chrome-spacer"></span><span>case 01 · Zenn API</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">case study 01 — Zenn API への大量リクエスト</div>
+    <h2 class="s-title">何が起きたか<span class="sub">RAG への記事取り込みを AI に任せたら、3 回 revert</span></h2>
+    <div class="s-rule"></div>
+    <div class="attempt-list" style="max-width:1700px;">
+      <div class="attempt">
+        <div class="badge">1 回目</div>
+        <div class="body">
+          <strong>仕様書を書かずに任せた</strong>
+          <span class="out">→ 上限なし・ディレイなしの実装が生成され、約 <strong style="color:var(--accent-deep);">5,000 リクエスト</strong> 発射、Cloudflare にブロックされる</span>
+        </div>
+      </div>
+      <div class="attempt">
+        <div class="badge">2 回目</div>
+        <div class="body">
+          <strong>仕様書を書いたが制約値の記載漏れ</strong>
+          <span class="out">→ GitHub のアカウント名を Zenn のものと混同して渡したら、Zenn API がフィルターを効かさず全記事返却。制限がなく <strong style="color:var(--accent-deep);">4,800 件走査</strong></span>
+        </div>
+      </div>
+      <div class="attempt">
+        <div class="badge">3 回目</div>
+        <div class="body">
+          <strong>安全ガイドに記載した「上限解除フラグ」の例を、AI が「そのフラグを実装せよ」と解釈</strong>
+          <span class="out">→ ルール文書を強化して再実装させたが止まらず</span>
+        </div>
+      </div>
+    </div>
+    <div class="callout-soft" style="margin-top:22px;font-size:50px;">
+      ルール文書を強化して再実装させたが止まらず、<strong>3 回 revert、4 日かかった</strong>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">14</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 15 / Zenn 事件 ② — 対策
+     ============================================================ -->
+<section data-screen-label="15 Zenn事件②">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ ハーネスエンジニアリングの変遷</span><span class="chrome-spacer"></span><span>case 01 · resolution</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">resolution — 対策</div>
+    <h2 class="s-title">コードに物理的な上限を埋め込む<span class="sub">外部 API 呼び出しを必ず通す共通入口にハードリミット</span></h2>
+    <div class="s-rule"></div>
+    <div class="split2">
+      <div>
+        <pre class="code" style="font-size:24px;"><span class="c-key">HARD_LIMIT_MAX_TOTAL_REQUESTS</span>   = <span class="c-num">10_000</span>  <span class="c-cmt"># 総リクエスト上限</span>
+<span class="c-key">HARD_LIMIT_MIN_REQUEST_INTERVAL</span> = <span class="c-num">0.1</span>     <span class="c-cmt"># 間隔の下限(s)</span>
+<span class="c-key">HARD_LIMIT_OPERATION_TIMEOUT</span>    = <span class="c-num">600.0</span>   <span class="c-cmt"># タイムアウト</span>
+<span class="c-key">HARD_LIMIT_CONSECUTIVE_FAILURES</span> = <span class="c-num">5</span>       <span class="c-cmt"># 連続失敗の許容</span></pre>
+        <p style="font-size:44px;color:var(--ink-mute);line-height:1.45;margin-top:14px;">
+          これらは引数・環境変数からは緩められず、<br>
+          <strong>コードを直接書き換えない限り超えられない</strong>
+        </p>
+      </div>
+      <div>
+        <div class="col-h">得たこと</div>
+        <ul class="dots">
+          <li>ルール文書だけでは守られない場面がある<ul><li>例として書いた文字列を AI が実装指示と解釈するなど</li></ul></li>
+          <li>守らせたい上限は、<br><strong class="accent">仕様書ではなくコード本体に書く</strong></li>
+        </ul>
+        <div class="callout" style="margin-top:18px;">
+          <div class="lede">パターン</div>
+          指示（書く）→ 実装（書き直せる）<br>
+          <strong>コード（書き直せない）</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">15</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 16 / ルール遵守の限界 ①
+     ============================================================ -->
+<section data-screen-label="16 ルール遵守の限界①">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ ハーネスエンジニアリングの変遷</span><span class="chrome-spacer"></span><span>case 02 · rules</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">case study 02 — ルール遵守の限界</div>
+    <h2 class="s-title">「指示」と「アクション」のあいだ<span class="sub">書いてあれば従う、ではない</span></h2>
+    <div class="s-rule"></div>
+    <div class="split2">
+      <div>
+        <ul class="dots">
+          <li><code style="font-family:var(--font-mono);color:var(--accent-deep);font-size:50px;">CLAUDE.md</code> に「README.md を必ず最初に読め」と書いた</li>
+          <li>CLAUDE.md 自体は<strong>システムプロンプトとして確実に読まれている</strong></li>
+          <li>それでも、Read ツールを呼んで README を取りに行く<br><strong class="accent">アクションが起きない</strong></li>
+          <li>セッションが出る<ul><li>ユーザーの質問への回答を優先して、Read 呼び出しを省略</li></ul></li>
+        </ul>
+      </div>
+      <div>
+        <div class="callout">
+          <div class="lede">観察</div>
+          <p style="font-size:52px;line-height:1.3;margin:0;">
+            「指示が書かれている」と<br>
+            「指示通りに行動する」の間には<br>
+            <strong class="accent">ギャップがある</strong>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">16</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 17 / ルール遵守の限界 ② — 対策
+     ============================================================ -->
+<section data-screen-label="17 ルール遵守の限界②">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ ハーネスエンジニアリングの変遷</span><span class="chrome-spacer"></span><span>case 02 · resolution</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">resolution — 対策</div>
+    <h2 class="s-title">"読め" より "注入する"<span class="sub">能動を効かせるより、受動の仕組みに変える</span></h2>
+    <div class="s-rule"></div>
+    <pre class="flow" style="font-size:40px;line-height:1.65;max-width:1700px;">
+<span class="label">指示</span>  CLAUDE.md「README.md を必ず読むこと」
+      <span class="arrow">↓</span>  <span class="note">読まれない</span>
+
+<span class="label">注入</span>  Hook で README.md の中身をセッション冒頭に毎回貼り付ける
+      <span class="arrow">→</span>  「読め」ではなく <strong style="color:var(--accent-deep);">「最初から読まされている」</strong> 状態に</pre>
+    <p style="font-size:54px;margin-top:20px;">
+      <strong>指示（能動）を効かせる</strong> より <strong class="accent">届く仕組み（受動）に変える</strong> ほうが確実
+    </p>
+    <div class="callout-soft" style="margin-top:20px;font-size:38px;font-family:var(--font-serif);font-style:italic;color:var(--ink-mute);">
+      余談 — 後に公式の <code style="font-family:var(--font-mono);font-style:normal;color:var(--accent-deep);">@import</code> 構文で同じことができると判明し、自作 Hook は撤廃
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">17</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 18 / AI チーム開発
+     ============================================================ -->
+<section data-screen-label="18 AIチーム開発">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ ハーネスエンジニアリングの変遷</span><span class="chrome-spacer"></span><span>case 03 · team</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">case study 03 — AI チーム開発を試した</div>
+    <h2 class="s-title">並列の楽しさと構造的な限界<span class="sub">100M context で容量問題は解消、構造問題は残った</span></h2>
+    <div class="s-rule"></div>
+    <div class="split2">
+      <div>
+        <div class="col-h">期待</div>
+        <p style="font-size:48px;line-height:1.4;">並列で作業が進めば効率が上がりそう</p>
+        <p style="font-size:42px;line-height:1.4;color:var(--ink-mute);margin-top:10px;">
+          導入直後は、エージェント同士の議論が活発で並列に作業が進む様子が新鮮で、<br>
+          <em>一人で開発している感が薄れることが楽しかった</em>
+        </p>
+
+        <div class="col-h" style="margin-top:22px;">直面した限界</div>
+        <ul class="dots" style="font-size:44px;">
+          <li style="font-size:44px;line-height:1.35;margin-bottom:10px;">初期は context が少なすぎてまともに使えなかった</li>
+          <li style="font-size:44px;line-height:1.35;margin-bottom:10px;">ベータ版のためかチーム間連携がうまくいかず、手戻りが多発</li>
+          <li style="font-size:44px;line-height:1.35;margin-bottom:10px;">コンテキスト共有が薄く、引き継ぎに余分な説明コストがかかる</li>
+        </ul>
+      </div>
+      <div>
+        <div class="callout">
+          <div class="lede">結論</div>
+          <p style="font-size:52px;line-height:1.3;margin:0;">
+            結局、<strong>単独エージェントで進めるほうが早い場面が多い</strong>
+          </p>
+          <p style="font-size:40px;color:var(--ink-mute);line-height:1.4;margin-top:12px;">
+            チーム機構は現状ほとんど使っていない
+          </p>
+        </div>
+        <div class="callout-soft" style="margin-top:16px;font-size:48px;line-height:1.35;">
+          <strong>構造的問題は容量では解決しなかった</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">18</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 19 / 動作確認スキップ ①
+     ============================================================ -->
+<section data-screen-label="19 動作確認スキップ①">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ ハーネスエンジニアリングの変遷</span><span class="chrome-spacer"></span><span>case 04 · QA</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">case study 04 — 動作確認スキップ問題</div>
+    <h2 class="s-title">ルール追加だけでは直らない<span class="sub">5 回対策しても改善せず、むしろ複雑化が判断ミスを誘発</span></h2>
+    <div class="s-rule"></div>
+    <p style="font-size:52px;line-height:1.4;max-width:1700px;">
+      実装完了時のチェック手順の一つ「動作確認」を AI が毎回スキップ<br>
+      <span style="color:var(--ink-mute);">（テスト pass で OK と判断して、実際に動かして確かめない）</span>
+    </p>
+    <div class="callout" style="margin-top:24px;">
+      <div class="lede">観察 1</div>
+      <p style="font-size:48px;line-height:1.35;margin:0;">
+        「テストケースさえ通れば全て OK と判断して、<br>
+        　実行テストを本気でやりたがらない」
+      </p>
+    </div>
+    <div class="callout" style="margin-top:18px;border-left-color:var(--accent-deep);">
+      <div class="lede">観察 2 — 人間に寄せて考える</div>
+      <p style="font-size:48px;line-height:1.35;margin:0;">
+        「人間のエンジニアも動作確認は嫌がる。<br>
+        　<strong class="accent">QA（品質保証）担当を独立させて、そちらでやらせるべき</strong>」
+      </p>
+    </div>
+    <p style="font-size:52px;margin-top:20px;">
+      → ルールでねじ伏せるのをやめて、<strong class="accent">手順そのものを変える</strong> 方針に転換
+    </p>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">19</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 20 / 動作確認スキップ ② — 対策
+     ============================================================ -->
+<section data-screen-label="20 動作確認スキップ②">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ ハーネスエンジニアリングの変遷</span><span class="chrome-spacer"></span><span>case 04 · resolution</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">resolution — 対策</div>
+    <h2 class="s-title">手順を分け、ユーザー判断を挟む<span class="sub">ルールではなく手順構造で解決</span></h2>
+    <div class="s-rule"></div>
+    <div class="attempt-list" style="max-width:1700px;">
+      <div class="attempt">
+        <div class="badge">Step 1</div>
+        <div class="body">
+          「動作確認」を実装セッションの手順から外す
+          <span class="out">→ 実装側は自動テストまで。動作確認は別セッションの QA に分離 — <em>実装者と検証者を分けた現実の QA に寄せる</em></span>
+        </div>
+      </div>
+      <div class="attempt">
+        <div class="badge">Step 2</div>
+        <div class="body">
+          それでも「軽微だから不要」と AI が自己判断でスキップ
+          <span class="out">→「QA するか / しないか」を<strong style="color:var(--accent-deep);">ユーザーが選ぶ手順</strong>に変更 — AI に判断させず、ユーザーが決める</span>
+        </div>
+      </div>
+    </div>
+    <div class="callout-soft" style="margin-top:28px;">
+      <div class="lede" style="font-size:30px;color:var(--accent-deep);margin-bottom:8px;font-style:italic;font-family:var(--font-serif);">教訓</div>
+      <p style="font-size:48px;line-height:1.35;margin:0;">
+        AI に自己判断させたくない場面は、ルールではなく<br>
+        <strong>手順そのものにユーザー判断ポイントを差し込む</strong> ほうが確実
+      </p>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">20</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 21 / CHAPTER 03
+     ============================================================ -->
+<section data-screen-label="21 章扉 03" class="slide-chapter">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">Claude Code 個人開発 3 ヶ月</span><span class="chrome-spacer"></span><span>Chapter 03</span></div>
+  <div class="chap-body">
+    <div class="chap-num">03</div>
+    <div class="chap-meta">
+      <div class="chap-label">Part three — Workflow</div>
+      <h2 class="chap-title">workflow と<br>主要スキル</h2>
+      <p class="chap-blurb">Issue を 1 件片付ける 8 ステップサイクルと、<br>各ステップで使う自作スキルの設計。</p>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">21</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 22 / 8 ステップサイクル
+     ============================================================ -->
+<section data-screen-label="22 8ステップサイクル">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ workflow と主要スキル</span><span class="chrome-spacer"></span><span>cycle</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">workflow — Issue 1 件あたりのサイクル</div>
+    <h2 class="s-title">8 ステップサイクル<span class="sub">/handoff から /restore へループする構造</span></h2>
+    <div class="s-rule"></div>
+    <div class="cycle">
+      <table>
+        <tr><td class="num">1</td><td class="step">復帰</td><td class="cmd">/restore</td><td class="note">前回ジャーナル</td></tr>
+        <tr><td class="num">2</td><td class="step">着手</td><td class="cmd">/start-work</td><td class="note">Issue + worktree</td></tr>
+        <tr><td class="num">3</td><td class="step">計画</td><td class="cmd">/plan-work or /aidlc</td><td class="note">影響範囲・完了基準</td></tr>
+        <tr><td></td><td></td><td class="hook" colspan="2">※ Hook が計画なし編集をブロック</td></tr>
+        <tr><td class="num">4</td><td class="step">実装</td><td class="cmd"></td><td class="note"></td></tr>
+        <tr><td class="num">5</td><td class="step">レビュー</td><td class="cmd">code-reviewer + doc-reviewer</td><td class="note"></td></tr>
+        <tr><td class="num">6</td><td class="step">締め</td><td class="cmd">/auto-finalize</td><td class="note">test → push → PR</td></tr>
+        <tr><td></td><td></td><td class="hook" colspan="2">※ Hook で経路をブロック</td></tr>
+        <tr><td class="num">7</td><td class="step">マージ後</td><td class="cmd">/merged</td><td class="note"></td></tr>
+        <tr><td class="num">8</td><td class="step">引継ぎ</td><td class="cmd">/handoff</td><td class="note">→ 次サイクルの /restore へ</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">22</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 23 / 計画スキルの使い分け
+     ============================================================ -->
+<section data-screen-label="23 計画スキル使い分け">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ workflow と主要スキル</span><span class="chrome-spacer"></span><span>planning</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">planning — /plan-work vs /aidlc</div>
+    <h2 class="s-title">修正規模で計画スキルを使い分ける</h2>
+    <div class="s-rule"></div>
+    <table style="max-width:1700px;">
+      <thead>
+        <tr>
+          <th style="width:24%;">修正規模</th>
+          <th style="width:30%;">使うもの</th>
+          <th>内容</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>数行・自明</strong></td>
+          <td>自動実装ラベルを Issue に付与</td>
+          <td>GitHub Actions が AI に実装させる</td>
+        </tr>
+        <tr>
+          <td><strong>バグ修正・小規模</strong></td>
+          <td><code style="font-family:var(--font-mono);color:var(--accent-deep);font-weight:700;">/plan-work</code></td>
+          <td>影響範囲 + 完了基準を最小限で</td>
+        </tr>
+        <tr>
+          <td><strong>中・大規模機能</strong></td>
+          <td><code style="font-family:var(--font-mono);color:var(--accent-deep);font-weight:700;">/aidlc</code></td>
+          <td>AI-DLC（AI 駆動開発ライフサイクル）</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="callout" style="margin-top:32px;max-width:1500px;">
+      <div class="lede">AI-DLC とは</div>
+      <p style="font-size:48px;line-height:1.4;margin:0;">
+        要件整理から実装までを多段階に分け、各ステージで<strong>ユーザー承認</strong>を挟みながら進める開発フロー（自作スキルとして実装）<br>
+        <span style="color:var(--ink-mute);font-size:40px;">意図整理 → 機能分割 → コード生成 → ...（各段階で確認）</span>
+      </p>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">23</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 24 / 主要スキル — 開始・計画
+     ============================================================ -->
+<section data-screen-label="24 スキル 開始/計画">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ workflow と主要スキル</span><span class="chrome-spacer"></span><span>skills · start / plan</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">skills — 開始 · 計画</div>
+    <h2 class="s-title">セッション開始 〜 計画</h2>
+    <div class="s-rule"></div>
+    <div class="attempt-list" style="max-width:1700px;">
+      <div class="attempt">
+        <div class="badge" style="font-family:var(--font-mono);font-style:normal;">/restore</div>
+        <div class="body">
+          <strong>セッション開始時</strong>
+          <span class="out">前回セッション記録（ジャーナル）+ MEMORY.md から文脈復元</span>
+        </div>
+      </div>
+      <div class="attempt">
+        <div class="badge" style="font-family:var(--font-mono);font-style:normal;">/start-work</div>
+        <div class="body">
+          <strong>Issue 着手時</strong>
+          <span class="out">Issue 取得 + ベースブランチ最新化 + <strong>worktree 作成</strong>（worktree = ブランチごとに別ディレクトリを切る git 機能）</span>
+        </div>
+      </div>
+      <div class="attempt">
+        <div class="badge" style="font-family:var(--font-mono);font-style:normal;">/plan-work<br>/aidlc</div>
+        <div class="body">
+          <strong>実装前の計画</strong>
+          <span class="out">影響範囲調査 + 完了基準合意 → 計画ファイル生成 — <strong style="color:var(--accent-deep);">※ Hook が計画ファイル不在時の編集をブロック</strong></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">24</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 25 / 主要スキル — 完了・引継ぎ
+     ============================================================ -->
+<section data-screen-label="25 スキル 完了/引継ぎ">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ workflow と主要スキル</span><span class="chrome-spacer"></span><span>skills · finalize / handoff</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">skills — 完了 · 引継ぎ</div>
+    <h2 class="s-title">完了 〜 引継ぎ（ループ）</h2>
+    <div class="s-rule"></div>
+    <div class="attempt-list" style="max-width:1700px;">
+      <div class="attempt">
+        <div class="badge" style="font-family:var(--font-mono);font-style:normal;">/auto-finalize</div>
+        <div class="body">
+          <strong>完了時</strong>
+          <span class="out">テスト → commit → push → PR → 監視ループ — <strong style="color:var(--accent-deep);">※ /auto-finalize 以外からの PR 作成を Hook でブロック</strong></span>
+        </div>
+      </div>
+      <div class="attempt">
+        <div class="badge" style="font-family:var(--font-mono);font-style:normal;">/handoff</div>
+        <div class="body">
+          <strong>セッション終了時</strong>
+          <span class="out">ジャーナル化 + 次セッション申し送り → 次の <code style="font-family:var(--font-mono);color:var(--accent-deep);">/restore</code> の入力（ループ構造）</span>
+        </div>
+      </div>
+    </div>
+    <pre class="flow" style="margin-top:30px;text-align:center;font-size:38px;max-width:1700px;">
+/handoff <span class="arrow">→</span> <span class="note">（次のセッション）</span> <span class="arrow">→</span> /restore <span class="arrow">→</span> /start-work <span class="arrow">→</span> ... <span class="arrow">→</span> /handoff</pre>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">25</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 26 / triage
+     ============================================================ -->
+<section data-screen-label="26 /triage">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">■ workflow と主要スキル</span><span class="chrome-spacer"></span><span>skills · /triage</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">cross-cutting — フロー横断で使うスキル</div>
+    <h2 class="s-title"><span style="font-family:var(--font-mono);color:var(--accent-deep);">/triage</span><span class="sub">確認が必要な場面で、いつでも使う</span></h2>
+    <div class="s-rule"></div>
+    <div class="split2">
+      <div>
+        <div class="col-h">使う場面</div>
+        <ul class="dots">
+          <li>実装中の方針分岐</li>
+          <li>レビュー指摘の取り扱い判断</li>
+          <li>スコープ判断（Issue 目的との整合性）</li>
+          <li>採用案 A/B/C の提示</li>
+          <li>前提整理が必要な技術判断</li>
+        </ul>
+      </div>
+      <div>
+        <div class="col-h">件数で手段を出し分け</div>
+        <table>
+          <thead>
+            <tr><th style="width:48%;">確認項目数</th><th>手段</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1 項目</strong></td>
+              <td><code style="font-family:var(--font-mono);color:var(--accent-deep);">AskUserQuestion</code><br><span style="color:var(--ink-mute);font-size:26px;">即応性重視</span></td>
+            </tr>
+            <tr>
+              <td><strong>2 項目以上</strong></td>
+              <td><strong>確認表ファイル方式</strong><br><span style="color:var(--ink-mute);font-size:26px;">俯瞰しながら記入</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">26</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 27 / 見えてきたこと
+     ============================================================ -->
+<section data-screen-label="27 見えてきたこと">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">Claude Code 個人開発 3 ヶ月</span><span class="chrome-spacer"></span><span>takeaways</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">takeaways — 3 ヶ月で見えてきたこと</div>
+    <h2 class="s-title">3 つの教訓</h2>
+    <div class="s-rule"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;">
+      <div class="callout" style="border-left-width:6px;">
+        <div class="lede">01 — control</div>
+        <p style="font-size:48px;font-weight:700;line-height:1.25;margin:0 0 12px;">
+          ルール文書では AI を<br>制御しきれない
+        </p>
+        <p style="font-size:36px;color:var(--ink-mute);line-height:1.35;margin:0;">
+          Hook や構造変更で<br>「物理的に止める」仕組みが効く
+        </p>
+      </div>
+      <div class="callout" style="border-left-width:6px;">
+        <div class="lede">02 — agents</div>
+        <p style="font-size:48px;font-weight:700;line-height:1.25;margin:0 0 12px;">
+          観点別サブエージェントは<br>有効
+        </p>
+        <p style="font-size:36px;color:var(--ink-mute);line-height:1.35;margin:0;">
+          1 つの AI に全部やらせるより、観点を分けたほうが良い結果。<br>
+          <em>汎用マルチエージェント"チーム"は現状の context 制約で扱いにくい</em>
+        </p>
+      </div>
+      <div class="callout" style="border-left-width:6px;">
+        <div class="lede">03 — skills</div>
+        <p style="font-size:48px;font-weight:700;line-height:1.25;margin:0 0 12px;">
+          スキル化で、毎回考え直す<br>手間が消える
+        </p>
+        <p style="font-size:36px;color:var(--ink-mute);line-height:1.35;margin:0;">
+          良かった運用パターンを残せば、次回も同じ品質で進められる
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">27</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 28 / AI 開発の難しさ
+     ============================================================ -->
+<section data-screen-label="28 AI開発の難しさ">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">Claude Code 個人開発 3 ヶ月</span><span class="chrome-spacer"></span><span>difficulty</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">reflection — AI 開発の難しさ</div>
+    <h2 class="s-title">LLM は思った通りに動かない<span class="sub">原因の切り分けが難しい / 効果の観測も難しい</span></h2>
+    <div class="s-rule"></div>
+    <div class="split2">
+      <div>
+        <div class="col-h">原因の切り分けが難しい</div>
+        <ul class="dots">
+          <li><strong>ルール</strong>の書き方の問題か、<br><strong>モデル</strong>の根本問題か</li>
+        </ul>
+        <div class="col-h" style="margin-top:24px;">修正しても、効果の観測が難しい</div>
+        <ul class="dots">
+          <li>応答にブレがあり、ルール変更の効果が見えにくい</li>
+          <li>自然言語で制御するしかなく、書き方一つで結果が変わる</li>
+        </ul>
+      </div>
+      <div>
+        <div class="callout-soft">
+          <div class="lede">今の状態</div>
+          <p style="font-size:48px;line-height:1.35;margin:0;">
+            みんなで同じ落とし穴に独自にハマり、<br>
+            <strong>時間を浪費している状態</strong>
+          </p>
+        </div>
+        <div class="callout" style="margin-top:18px;">
+          <div class="lede">期待</div>
+          <p style="font-size:50px;line-height:1.25;margin:0;font-weight:700;">
+            早く<span class="accent">ハーネスエンジニアリングの<br>デザインパターン</span>が固まってほしい
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">28</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 29 / はてなブログ
+     ============================================================ -->
+<section data-screen-label="29 はてなブログで記録中">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">Claude Code 個人開発 3 ヶ月</span><span class="chrome-spacer"></span><span>journal</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">notice — はてなブログで記録中</div>
+    <h2 class="s-title">100 日分の対話形式日記<span class="sub">オリジナルキャラクター 2 人の対話で生成</span></h2>
+    <div class="s-rule"></div>
+    <div class="split2" style="grid-template-columns:1.4fr 0.6fr;align-items:center;">
+      <div>
+        <ul class="dots">
+          <li>ジャーナルと Bluesky 投稿を素材に、<br>
+            <strong>オリジナルキャラクター 2 人の対話形式</strong>で日記化中</li>
+          <li>article-writer プロジェクトで生成</li>
+          <li>公開はまだ数日分。これから<br><strong class="accent">約 100 日分</strong>を順次アップ予定</li>
+        </ul>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:48px;">
+        <div class="qr">
+          <span>QR — はてなブログ</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">29</span> / 30</span></div>
+</section>
+
+<!-- ============================================================
+     S 30 / 今後やっていきたいこと
+     ============================================================ -->
+<section data-screen-label="30 今後やっていきたいこと">
+  <div class="chrome-header"><span class="chrome-dot"></span><span class="brand">Claude Code 個人開発 3 ヶ月</span><span class="chrome-spacer"></span><span>what's next</span></div>
+  <div class="slide-body">
+    <div class="eyebrow">what's next — 今後やっていきたいこと</div>
+    <h2 class="s-title">ハーネスをコードの外へ広げたい<span class="sub">個人として — MCP でアプリケーションを直接操作</span></h2>
+    <div class="s-rule"></div>
+    <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:28px;margin-top:24px;">
+      <div class="repo-card" style="grid-template-columns:1fr;padding:32px 32px;">
+        <span class="tag" style="justify-self:start;">3D · Game</span>
+        <div>
+          <div class="name" style="font-size:40px;margin-bottom:12px;">unityMCP</div>
+          <div class="desc" style="font-size:30px;">AI が Unity を<br>直接操作</div>
+        </div>
+      </div>
+      <div class="repo-card" style="grid-template-columns:1fr;padding:32px 32px;">
+        <span class="tag" style="justify-self:start;">3D · Asset</span>
+        <div>
+          <div class="name" style="font-size:40px;margin-bottom:12px;">BlenderMCP</div>
+          <div class="desc" style="font-size:30px;">AI が 3D アセットを<br>直接編集</div>
+        </div>
+      </div>
+      <div class="repo-card" style="grid-template-columns:1fr;padding:32px 32px;">
+        <span class="tag" style="justify-self:start;">Browser</span>
+        <div>
+          <div class="name" style="font-size:38px;margin-bottom:12px;">Chrome DevTools MCP</div>
+          <div class="desc" style="font-size:30px;">AI がブラウザを<br>直接動かす</div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:60px;display:flex;align-items:center;gap:24px;">
+      <div style="width:60px;height:60px;background:var(--accent);border-radius:8px;flex-shrink:0;box-shadow:0 12px 32px rgba(176,81,47,0.25);"></div>
+      <p style="font-family:var(--font-serif);font-style:italic;font-size:52px;color:var(--ink);margin:0;line-height:1.25;">
+        Thank you. — 木部 暁
+      </p>
+    </div>
+  </div>
+  <div class="chrome-footer"><span class="meta">2026-05-17 · LT</span><span class="chrome-spacer"></span><span class="chrome-pageno"><span class="num">30</span> / 30</span></div>
+</section>
+
+</deck-stage>
+
+<!-- ===== Tweaks panel ===== -->
+<div id="tweaks-root"></div>
+
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="tweaks-app.jsx"></script>
+
+</body>
+</html>
