@@ -285,6 +285,17 @@ Phase 0 ステップ 1 で保存した `PARENT_REPO` をそのまま使うため
 
    削除失敗は無視する（リモートが `--delete-branch` で消されている場合、ローカル追跡ブランチは自動的に消えるためエラーが出ても無害。未マージ状態なら `-d` は保護されるが、Phase 3-6 でマージ成功している前提のため通常は削除可）
 
+4. 親リポ main の最新化（squash マージ済みコミットをローカルへ取り込む）:
+
+   ```bash
+   git pull --ff-only origin main 2>/dev/null || true
+   ```
+
+   PR が `gh pr merge --squash` でリモート main にマージ済みなので、本ステップで `--ff-only` で同期する。
+   失敗（ネットワーク断・unexpected non-fast-forward 等）は無視し `status=ok` を保つ
+   （次回 `/auto-publish-diary` 実行時の Phase 0 で再度同期される）。
+   ユーザーが手動で別作業を始めるときに古い main から始める事故を防ぐのが目的
+
 ### Phase 5: 最終出力
 
 成功時（worktree 削除済み）:
