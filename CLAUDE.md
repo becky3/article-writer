@@ -7,7 +7,8 @@
 - プラットフォーム別スキルで記事を生成する Claude Code スキルプロジェクト
 - 記事生成スキル: `/write-zenn`（Zenn 形式）/ `/write-hatena-diary`（はてなブログ向け日記）
 - 記事投稿スキル: `/publish-hatena`（はてなブログ AtomPub で下書き登録）
-- 記事レビュースキル: `/multi-perspective-review`（観点別エージェント並列レビュー、生成後の品質確認用）
+- 記事レビュースキル: `/multi-perspective-review`（観点別エージェント並列レビュー、生成後の品質確認用）/ `/review-hatena-diary`（日記特化レビュー）
+- 自動投稿スキル: `/auto-publish-diary`（生成→下書き登録→PR→マージを一括する無人実行ワンショット、Slack reminder からの定時実行用）
 - 生成記事は `articles/{platform}/` 配下に出力（ファイル名規約は各スキル SKILL.md を参照）
 - 素材源として参照する対象リポジトリは `.claude/sources.yml` で管理。ローカルパス解決には環境変数 `LOCAL_REPOS_ROOT` を使用
 
