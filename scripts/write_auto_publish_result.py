@@ -32,8 +32,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import sys
+import tempfile
 
 
 def build_result(args: argparse.Namespace) -> dict:
@@ -57,6 +59,7 @@ def build_result(args: argparse.Namespace) -> dict:
         "draft_url": args.draft_url,
         "pr_url": args.pr_url,
         "merged": False,
+        "worktree_removed": False,
         "worktree_path": args.worktree_path,
     }
 
@@ -109,9 +112,26 @@ def main() -> int:
 
     target = target_dir / "result.json"
     result = build_result(args)
+    payload = json.dumps(result, ensure_ascii=False) + "\n"
+
+    # 同一ディレクトリのテンポラリファイルへ書き出してから atomic rename で置き換える。
+    # 書き込み途中のプロセス中断・ディスクフル等でも、既存 result.json の完全性を保つ
+    # （publish_hatena.py の published.jsonl 更新と同じパターン）。
     try:
-        target.write_text(json.dumps(result, ensure_ascii=False) + "\n", encoding="utf-8")
+        tmp_fd, tmp_path = tempfile.mkstemp(prefix=".result.json.", dir=target_dir)
     except OSError as exc:
+        sys.stderr.write(f"ERROR: failed to create temp file in {target_dir}: {exc}\n")
+        return 1
+
+    try:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+            f.write(payload)
+        os.replace(tmp_path, target)
+    except OSError as exc:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
         sys.stderr.write(f"ERROR: failed to write {target}: {exc}\n")
         return 1
 

@@ -92,6 +92,7 @@ class WriteAutoPublishResultTest(unittest.TestCase):
             "draft_url": None,
             "pr_url": None,
             "merged": False,
+            "worktree_removed": False,
             "worktree_path": None,
         })
 
@@ -112,6 +113,7 @@ class WriteAutoPublishResultTest(unittest.TestCase):
         self.assertEqual(data["failed_phase"], "git")
         self.assertEqual(data["pr_url"], "https://github.com/.../pull/1")
         self.assertEqual(data["merged"], False)
+        self.assertEqual(data["worktree_removed"], False)
 
     def test_special_characters_in_values(self) -> None:
         result = run_script([
@@ -193,6 +195,19 @@ class WriteAutoPublishResultTest(unittest.TestCase):
         data = self._read_result()
         self.assertEqual(data["status"], "error")
         self.assertNotIn("old", data)
+
+    def test_no_temp_file_left_after_success(self) -> None:
+        result = run_script([
+            "--parent-repo", str(self.parent_repo),
+            "--status", "ok",
+            "--article-path", "x.md",
+            "--draft-url", "https://x",
+            "--pr-url", "https://y",
+            "--worktree-removed", "true",
+        ])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        leftover = list(self.result_path.parent.glob(".result.json.*"))
+        self.assertEqual(leftover, [], f"atomic write temp files left behind: {leftover}")
 
 
 if __name__ == "__main__":

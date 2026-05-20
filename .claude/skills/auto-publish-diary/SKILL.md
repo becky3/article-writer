@@ -60,10 +60,10 @@ argument-hint: "(引数なし)"
 {"status":"ok","article_path":"articles/hatena/YYYY-MM-DD-diary.md","draft_url":"https://<blog>/entry/...","pr_url":"https://github.com/becky3/article-writer/pull/N","merged":true,"worktree_removed":false,"worktree_path":"D:/GitHub/becky3/article-writer-wt-auto-YYYYMMDD"}
 ```
 
-失敗時の result.json（成功時と共通フィールドは同順に並べる）:
+失敗時の result.json（成功時と共通フィールドは同順に並べる。`worktree_removed` は失敗時も常に `false` を含めて呼び出し元が単一スキーマでアクセスできるようにする）:
 
 ```json
-{"status":"error","failed_phase":"<Phase 名>","error":"<エラー要約 1 行>","article_path":"<生成済みなら相対パス、なければ null>","draft_url":"<登録済みなら URL、なければ null>","pr_url":"<作成済みなら URL、なければ null>","merged":false,"worktree_path":"<残置 worktree の絶対パス or null>"}
+{"status":"error","failed_phase":"<Phase 名>","error":"<エラー要約 1 行>","article_path":"<生成済みなら相対パス、なければ null>","draft_url":"<登録済みなら URL、なければ null>","pr_url":"<作成済みなら URL、なければ null>","merged":false,"worktree_removed":false,"worktree_path":"<残置 worktree の絶対パス or null>"}
 ```
 
 JSON フィールドの説明（全モード共通スキーマ）:
@@ -548,7 +548,7 @@ result.json の内容例（成功・worktree 削除済み）:
 result.json の内容例（失敗）:
 
 ```json
-{"status":"error","failed_phase":"...","error":"...","article_path":"...","draft_url":null,"pr_url":null,"merged":false,"worktree_path":"..."}
+{"status":"error","failed_phase":"...","error":"...","article_path":"...","draft_url":null,"pr_url":null,"merged":false,"worktree_removed":false,"worktree_path":"..."}
 ```
 
 終了コード:
