@@ -138,14 +138,20 @@ JSON フィールドの説明（全モード共通スキーマ）:
 
 `/publish-hatena` の Skill ツール経由起動では subprocess の stderr / exit code を直接取得する手段がないため、本 Phase は `python scripts/publish_hatena.py` を Bash で直接起動する。
 
-1. 投稿実行:
+Phase 1 で確定した `ARTICLE_PATH` と異なる記事を誤って投稿しないよう、ファイル名から日付を抽出して `publish_hatena.py` に引数として明示的に渡す（引数なし起動だと `articles/hatena/` 内の最新ファイルが選ばれるため、別日の手動生成ファイルが存在すると誤投稿リスクがある）:
+
+1. 投稿実行（ログ出力先ディレクトリは tee 前に必ず作成する）:
 
    ```bash
-   python scripts/publish_hatena.py 2> .tmp/auto-publish-diary/publish-stderr.log | tee .tmp/auto-publish-diary/publish-stdout.log
+   mkdir -p .tmp/auto-publish-diary
+   PUBLISH_DATE=$(basename "$ARTICLE_PATH" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}')
+   if [ -z "$PUBLISH_DATE" ]; then
+     echo "[PHASE publish] 失敗: ARTICLE_PATH から日付を抽出できず: ${ARTICLE_PATH}"; exit 1
+   fi
+   python scripts/publish_hatena.py "$PUBLISH_DATE" 2> .tmp/auto-publish-diary/publish-stderr.log | tee .tmp/auto-publish-diary/publish-stdout.log
    PUBLISH_EXIT=${PIPESTATUS[0]}
    ```
 
-   `.tmp/auto-publish-diary/` ディレクトリが存在しなければ `mkdir -p` で作成
 2. `PUBLISH_EXIT` が 0 でない場合は失敗扱い:
 
    ```bash
