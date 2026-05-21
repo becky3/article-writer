@@ -143,13 +143,29 @@ python scripts/write_auto_publish_result.py \
        --error "親リポに未コミット変更があります"
      exit 1
    fi
-   if ! git -C "$PARENT_REPO" switch main || ! git -C "$PARENT_REPO" pull --ff-only; then
-     echo "[PHASE environment] 失敗: main の最新化に失敗"
+   if ! git -C "$PARENT_REPO" switch main; then
+     echo "[PHASE environment] 失敗: git switch main に失敗"
      python scripts/write_auto_publish_result.py \
        --parent-repo "$PARENT_REPO" \
        --status error \
        --failed-phase environment \
-       --error "main の最新化に失敗（git switch main / git pull --ff-only）"
+       --error "git switch main に失敗"
+     exit 1
+   fi
+   if ! GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=30' \
+        timeout 120 git -C "$PARENT_REPO" pull --ff-only; then
+     PULL_EXIT=$?
+     if [ "$PULL_EXIT" -eq 124 ]; then
+       ERROR_MSG="git pull --ff-only がタイムアウト（120 秒）"
+     else
+       ERROR_MSG="git pull --ff-only に失敗（exit ${PULL_EXIT}）"
+     fi
+     echo "[PHASE environment] 失敗: ${ERROR_MSG}"
+     python scripts/write_auto_publish_result.py \
+       --parent-repo "$PARENT_REPO" \
+       --status error \
+       --failed-phase environment \
+       --error "${ERROR_MSG}"
      exit 1
    fi
    ```
@@ -372,13 +388,20 @@ fi
 3. push:
 
    ```bash
-   if ! git push -u origin "$BRANCH_NAME"; then
-     echo "[PHASE git] 失敗: git push に失敗"
+   if ! GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=30' \
+        timeout 120 git push -u origin "$BRANCH_NAME"; then
+     PUSH_EXIT=$?
+     if [ "$PUSH_EXIT" -eq 124 ]; then
+       ERROR_MSG="git push がタイムアウト（120 秒）"
+     else
+       ERROR_MSG="git push に失敗（exit ${PUSH_EXIT}）"
+     fi
+     echo "[PHASE git] 失敗: ${ERROR_MSG}"
      python scripts/write_auto_publish_result.py \
        --parent-repo "$PARENT_REPO" \
        --status error \
        --failed-phase git \
-       --error "git push に失敗" \
+       --error "${ERROR_MSG}" \
        --worktree-path "$WORKTREE_PATH" \
        --article-path "$ARTICLE_PATH" \
        --draft-url "$DRAFT_URL"
@@ -404,17 +427,23 @@ fi
 5. PR 作成（`--body-file` で本文を渡す）。`gh pr create` の stdout に追加行が混じるバージョン差異への耐性として `tail -1` で最終行のみ採用する。`gh pr create` 自体の失敗と PR 番号抽出失敗の両方を捕捉する:
 
    ```bash
-   if ! PR_URL=$(gh pr create \
+   if ! PR_URL=$(timeout 120 gh pr create \
      --base main \
      --head "$BRANCH_NAME" \
      --title "diary: ${ARTICLE_DATE} の日記を追加" \
      --body-file "$PR_BODY_FILE" | tail -1); then
-     echo "[PHASE git] 失敗: gh pr create に失敗"
+     CREATE_EXIT=${PIPESTATUS[0]}
+     if [ "$CREATE_EXIT" -eq 124 ]; then
+       ERROR_MSG="gh pr create がタイムアウト（120 秒）"
+     else
+       ERROR_MSG="gh pr create に失敗（exit ${CREATE_EXIT}）"
+     fi
+     echo "[PHASE git] 失敗: ${ERROR_MSG}"
      python scripts/write_auto_publish_result.py \
        --parent-repo "$PARENT_REPO" \
        --status error \
        --failed-phase git \
-       --error "gh pr create に失敗" \
+       --error "${ERROR_MSG}" \
        --worktree-path "$WORKTREE_PATH" \
        --article-path "$ARTICLE_PATH" \
        --draft-url "$DRAFT_URL"
@@ -438,13 +467,19 @@ fi
 6. 即マージ（CI 待たず）。PR 番号で `gh pr merge` を呼ぶ:
 
    ```bash
-   if ! gh pr merge "$PR_NUMBER" --squash --admin --delete-branch; then
-     echo "[PHASE git] 失敗: gh pr merge に失敗"
+   if ! timeout 120 gh pr merge "$PR_NUMBER" --squash --admin --delete-branch; then
+     MERGE_EXIT=$?
+     if [ "$MERGE_EXIT" -eq 124 ]; then
+       ERROR_MSG="gh pr merge がタイムアウト（120 秒）"
+     else
+       ERROR_MSG="gh pr merge に失敗（exit ${MERGE_EXIT}）"
+     fi
+     echo "[PHASE git] 失敗: ${ERROR_MSG}"
      python scripts/write_auto_publish_result.py \
        --parent-repo "$PARENT_REPO" \
        --status error \
        --failed-phase git \
-       --error "gh pr merge に失敗" \
+       --error "${ERROR_MSG}" \
        --worktree-path "$WORKTREE_PATH" \
        --article-path "$ARTICLE_PATH" \
        --draft-url "$DRAFT_URL" \
@@ -491,11 +526,12 @@ Phase 0 ステップ 1 で保存した `PARENT_REPO` をそのまま使うため
 4. 親リポ main の最新化（squash マージ済みコミットをローカルへ取り込む）:
 
    ```bash
-   git pull --ff-only origin main 2>/dev/null || true
+   GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=30' \
+     timeout 120 git pull --ff-only origin main 2>/dev/null || true
    ```
 
    PR が `gh pr merge --squash` でリモート main にマージ済みなので、本ステップで `--ff-only` で同期する。
-   失敗（ネットワーク断・unexpected non-fast-forward 等）は無視し `status=ok` を保つ
+   失敗（ネットワーク断・unexpected non-fast-forward・タイムアウト等）は無視し `status=ok` を保つ
    （次回 `/auto-publish-diary` 実行時の Phase 0 で再度同期される）。
    ユーザーが手動で別作業を始めるときに古い main から始める事故を防ぐのが目的
 
@@ -576,6 +612,7 @@ result.json の内容例（失敗）:
 | `gh pr create` 失敗 | git | merge スキップ |
 | `gh pr merge` 失敗 | git | cleanup スキップ |
 | `git worktree remove` 失敗（Windows ロック等） | (なし) | warning のみ。`status=ok` + `worktree_removed=false` で終了 |
+| 外部コマンドのタイムアウト（120 秒超過、終了コード 124） | 該当 Phase（`environment` / `git`） | 該当 Phase の既存失敗ハンドラに合流。error メッセージに「タイムアウト（120 秒）」を含めて識別可能にする。後続 Phase の挙動は通常失敗と同じ |
 
 ## リカバリフロー
 
@@ -594,6 +631,18 @@ result.json の内容例（失敗）:
 | `cleanup`（worktree 削除のみ失敗） | 全工程完了、worktree のみ残置 | `git -C <親リポ> worktree remove --force <worktree_path>` を手動。`status=ok` のため Slack 通知は成功扱い |
 
 **published.jsonl の重複検知**: `publish-hatena` は成功時 `published.jsonl` に追記済みのため、同日に再実行すると重複エラーになる。再投稿が必要なら `python scripts/publish_hatena.py <date> --force` で既存エントリを PUT 更新する。
+
+## 無人モード制約
+
+本スキル実行中は `claude -p` 非対話モードでの動作が前提となるため、以下の global rules を **本スキル実行中に限り上書き禁止** する。スキル本体内だけでなく、スキル起動前後・エラー対応中も含めて適用する。
+
+- `AskUserQuestion` 発行禁止（`/triage` 経由・直接発行ともに）
+- `code` コマンドによる GUI 起動禁止（subprocess 環境のため機能しない）
+- `~/.claude/rules/quality-gate.md` の Phase 2（code-reviewer / doc-reviewer 起動）はスキップ
+- 同 Phase 3（AskUserQuestion による QA 実施確認）はスキップ
+- 同 Phase 4 の `/auto-finalize` は起動せず、本スキル Phase 3 の git/gh コマンドで commit / push / PR / merge を完結させる
+- `~/.claude/rules/invariants.md` のスコープ判断は「Issue 目的に必要なら実行、それ以外はスキップ」で機械的に処理し、`/triage` を呼ばない
+- 失敗時は本スキルの result.json 書き込み + exit 1 のみで終了し、追加の判断・確認・リカバリ提案を行わない
 
 ## 注意事項
 
