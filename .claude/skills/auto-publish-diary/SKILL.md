@@ -152,9 +152,10 @@ python scripts/write_auto_publish_result.py \
        --error "git switch main に失敗"
      exit 1
    fi
-   if ! GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=30' \
-        timeout 120 git -C "$PARENT_REPO" pull --ff-only; then
-     PULL_EXIT=$?
+   PULL_EXIT=0
+   GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=30' \
+     timeout 120 git -C "$PARENT_REPO" pull --ff-only || PULL_EXIT=$?
+   if [ "$PULL_EXIT" -ne 0 ]; then
      if [ "$PULL_EXIT" -eq 124 ]; then
        ERROR_MSG="git pull --ff-only がタイムアウト（120 秒）"
      else
@@ -388,9 +389,10 @@ fi
 3. push:
 
    ```bash
-   if ! GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=30' \
-        timeout 120 git push -u origin "$BRANCH_NAME"; then
-     PUSH_EXIT=$?
+   PUSH_EXIT=0
+   GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=30' \
+     timeout 120 git push -u origin "$BRANCH_NAME" || PUSH_EXIT=$?
+   if [ "$PUSH_EXIT" -ne 0 ]; then
      if [ "$PUSH_EXIT" -eq 124 ]; then
        ERROR_MSG="git push がタイムアウト（120 秒）"
      else
@@ -427,12 +429,13 @@ fi
 5. PR 作成（`--body-file` で本文を渡す）。`gh pr create` の stdout に追加行が混じるバージョン差異への耐性として `tail -1` で最終行のみ採用する。`gh pr create` 自体の失敗と PR 番号抽出失敗の両方を捕捉する:
 
    ```bash
-   if ! PR_URL=$(timeout 120 gh pr create \
+   CREATE_EXIT=0
+   PR_CREATE_OUTPUT=$(timeout 120 gh pr create \
      --base main \
      --head "$BRANCH_NAME" \
      --title "diary: ${ARTICLE_DATE} の日記を追加" \
-     --body-file "$PR_BODY_FILE" | tail -1); then
-     CREATE_EXIT=${PIPESTATUS[0]}
+     --body-file "$PR_BODY_FILE") || CREATE_EXIT=$?
+   if [ "$CREATE_EXIT" -ne 0 ]; then
      if [ "$CREATE_EXIT" -eq 124 ]; then
        ERROR_MSG="gh pr create がタイムアウト（120 秒）"
      else
@@ -449,6 +452,7 @@ fi
        --draft-url "$DRAFT_URL"
      exit 1
    fi
+   PR_URL=$(printf '%s\n' "$PR_CREATE_OUTPUT" | tail -1)
    PR_NUMBER=$(echo "$PR_URL" | grep -oE '/pull/[0-9]+$' | grep -oE '[0-9]+$')
    if [ -z "$PR_NUMBER" ]; then
      echo "[PHASE git] 失敗: gh pr create 出力から PR 番号を抽出できず: ${PR_URL}"
@@ -467,8 +471,9 @@ fi
 6. 即マージ（CI 待たず）。PR 番号で `gh pr merge` を呼ぶ:
 
    ```bash
-   if ! timeout 120 gh pr merge "$PR_NUMBER" --squash --admin --delete-branch; then
-     MERGE_EXIT=$?
+   MERGE_EXIT=0
+   timeout 120 gh pr merge "$PR_NUMBER" --squash --admin --delete-branch || MERGE_EXIT=$?
+   if [ "$MERGE_EXIT" -ne 0 ]; then
      if [ "$MERGE_EXIT" -eq 124 ]; then
        ERROR_MSG="gh pr merge がタイムアウト（120 秒）"
      else
