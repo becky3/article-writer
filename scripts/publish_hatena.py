@@ -10,9 +10,10 @@
 4. フロントマター（title / date / category）を解析、本文を取得
 5. リポジトリルートの .env から HATENA_ID / HATENA_BLOG_ID を取得
 6. keyring から HATENA_API_KEY を取得（service="article-writer"）
-7. AtomPub Atom Entry XML を組み立て（`<title>` / `<updated>` / `<content type="text/x-markdown">` / `<app:draft>yes</app:draft>` / `<category>`）
-8. Basic 認証で --force なしは POST、--force ありは既存 edit_url へ PUT
-9. POST 成功時 published.jsonl に 1 行 JSON を追記、PUT 成功時は title を最新タイトルに更新（edit_url 保持）
+7. --force 時のみ: edit_url に対して GET し、レスポンスの `<app:control>/<app:draft>` 値（yes / no）を取得する
+8. AtomPub Atom Entry XML を組み立て（`<title>` / `<updated>` / `<content type="text/x-markdown">` / `<app:control>/<app:draft>` は POST 時 `yes` 固定、PUT 時はステップ 7 で取得した値を明示送信 / `<category>`）
+9. Basic 認証で --force なしは POST、--force ありは既存 edit_url へ PUT
+10. POST 成功時 published.jsonl に 1 行 JSON を追記、PUT 成功時は title を最新タイトルに更新（edit_url 保持）
 
 使用例:
 
@@ -235,7 +236,10 @@ def build_atom_entry(
     """AtomPub Atom Entry XML を組み立てる.
 
     `<content type="text/x-markdown">` で Markdown を直接送信する。
-    `<app:draft>yes/no</app:draft>` で下書き/公開を切り替える。
+    `draft` が `True`/`False` のとき `<app:draft>yes/no</app:draft>` を明示送信して
+    下書き/公開を切り替える。はてな AtomPub 公式仕様では `<app:draft>` を省略すると
+    「下書きでない」と判定される（= 公開化）ため、PUT 更新で既存の下書き状態を保持したい
+    場合は事前に GET で取得した draft 値をそのまま渡すこと（fetch_entry_draft_status 参照）。
     `published_iso` が指定された場合は `<updated>` 要素を出力し、はてなブログの
     公開日時としてその値を使う（下書き状態でも公開時に指定日時で表示される）。
     """
@@ -257,9 +261,96 @@ def build_atom_entry(
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
+def fetch_entry_draft_status(
+    *,
+    edit_url: str,
+    hatena_id: str,
+    api_key: str,
+) -> bool:
+    """既存エントリの draft 状態を GET で取得する.
+
+    はてな AtomPub 公式仕様では PUT 時に `<app:draft>` を省略すると公開扱いになるため、
+    PUT 前にこの関数で現状を取得し、build_atom_entry に同じ値を渡して状態を維持する。
+
+    Returns:
+        True (下書き) / False (公開)
+    Raises:
+        RuntimeError: HTTP エラー、ネットワーク失敗、XML パース失敗、
+            `<app:control>/<app:draft>` 要素不在のいずれか
+    """
+    try:
+        _status, body = _atompub_request(
+            method="GET",
+            url=edit_url,
+            hatena_id=hatena_id,
+            api_key=api_key,
+        )
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"GET 失敗 (HTTP {exc.code}): {edit_url}") from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError(f"GET ネットワークエラー: {exc}") from exc
+
+    namespaces = {
+        "atom": "http://www.w3.org/2005/Atom",
+        "app": "http://www.w3.org/2007/app",
+    }
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError as exc:
+        raise RuntimeError(f"GET レスポンス XML パース失敗: {exc}") from exc
+
+    control_elem = root.find("app:control", namespaces)
+    if control_elem is None:
+        raise RuntimeError(
+            "GET レスポンスに app:control 要素が見つかりません"
+        )
+    draft_elem = control_elem.find("app:draft", namespaces)
+    if draft_elem is None:
+        raise RuntimeError(
+            "GET レスポンスに app:control/app:draft 要素が見つかりません"
+        )
+    if draft_elem.text is None or draft_elem.text.strip() == "":
+        raise RuntimeError(
+            "GET レスポンスの app:control/app:draft 要素にテキスト値がありません"
+        )
+    draft_text = draft_elem.text.strip().lower()
+    if draft_text not in ("yes", "no"):
+        raise RuntimeError(
+            f"GET レスポンスの app:draft 値が想定外です: '{draft_elem.text}'"
+            " (yes / no のみ受け付ける)"
+        )
+    return draft_text == "yes"
+
+
 def basic_auth_header(hatena_id: str, api_key: str) -> str:
     token = base64.b64encode(f"{hatena_id}:{api_key}".encode("utf-8")).decode("ascii")
     return f"Basic {token}"
+
+
+def _atompub_request(
+    *,
+    method: str,
+    url: str,
+    hatena_id: str,
+    api_key: str,
+    payload: bytes | None = None,
+) -> tuple[int, bytes]:
+    """AtomPub への HTTP リクエスト送信の共通実装.
+
+    Basic 認証ヘッダ・Content-Type ヘッダ（payload あり時のみ）・タイムアウト（30 秒）を
+    一元管理する。送信成功時は (HTTP status, レスポンスボディ bytes) を返す。
+    ネットワーク失敗系の例外はそのまま raise し、呼び出し側でモード別に変換する
+    （`send_entry` は -1/status コードへ、`fetch_entry_draft_status` は `RuntimeError` へ）。
+
+    Raises:
+        urllib.error.HTTPError, urllib.error.URLError, TimeoutError
+    """
+    headers = {"Authorization": basic_auth_header(hatena_id, api_key)}
+    if payload is not None:
+        headers["Content-Type"] = "application/atom+xml; charset=utf-8"
+    req = urllib.request.Request(url, data=payload, method=method, headers=headers)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.status, resp.read()
 
 
 def send_entry(
@@ -275,18 +366,15 @@ def send_entry(
     戻り値の HTTP status はネットワーク失敗時 -1 を返す（HTTP ステータスと識別可能にするため）。
     呼び出し元は 200/201 以外を全て失敗として扱う。
     """
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        method=method,
-        headers={
-            "Authorization": basic_auth_header(hatena_id, api_key),
-            "Content-Type": "application/atom+xml; charset=utf-8",
-        },
-    )
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return resp.status, resp.read().decode("utf-8", errors="replace")
+        status, body = _atompub_request(
+            method=method,
+            url=url,
+            hatena_id=hatena_id,
+            api_key=api_key,
+            payload=payload,
+        )
+        return status, body.decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:
         # HTTPError は URLError のサブクラスのため先に捕捉する
         body = e.read().decode("utf-8", errors="replace") if e.fp else ""
@@ -502,18 +590,39 @@ def main(argv: list[str] | None = None) -> int:
     # 公開時にこの日時が記事の公開日として表示される。
     published_iso = f"{diary_date}T00:00:00+09:00"
 
-    payload = build_atom_entry(
-        title=title,
-        body=body,
-        category=category,
-        draft=True,
-        published_iso=published_iso,
-    )
-
+    # PUT (--force) では事前に GET で既存の draft 状態を取得し、同じ値を明示送信して
+    # 公開状態を維持する。はてな AtomPub 公式仕様で `<app:draft>` を省略すると
+    # 公開扱いになるため、明示が必須。
+    # POST (新規) は下書き登録のため draft=True。
     if args.force:
         assert existing is not None
         target_edit_url = existing["edit_url"]
         assert target_edit_url is not None
+        print("🔍 既存の draft 状態を取得中...", file=sys.stderr)
+        try:
+            current_draft = fetch_entry_draft_status(
+                edit_url=target_edit_url,
+                hatena_id=hatena_id,
+                api_key=api_key,
+            )
+        except RuntimeError as exc:
+            print(f"❌ {exc}", file=sys.stderr)
+            return 1
+        state_label = "下書き" if current_draft else "公開"
+        print(f"  現在の状態: {state_label}", file=sys.stderr)
+        draft_value: bool = current_draft
+    else:
+        draft_value = True
+
+    payload = build_atom_entry(
+        title=title,
+        body=body,
+        category=category,
+        draft=draft_value,
+        published_iso=published_iso,
+    )
+
+    if args.force:
         print(f"🔄 PUT 中 (title: {title})", file=sys.stderr)
         status, response = put_entry(
             edit_url=target_edit_url,
@@ -521,7 +630,7 @@ def main(argv: list[str] | None = None) -> int:
             api_key=api_key,
             payload=payload,
         )
-        op_label = "下書き更新成功"
+        op_label = f"更新成功（{state_label}状態を維持）"
     else:
         print(f"📤 POST 中 (title: {title})", file=sys.stderr)
         status, response = post_entry(

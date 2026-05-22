@@ -1,6 +1,6 @@
 ---
 name: publish-hatena
-description: 生成済みの日記記事を、はてなブログ AtomPub で下書きとして投稿する
+description: 生成済みの日記記事を、はてなブログ AtomPub で下書き投稿し、--force で既存エントリを更新する
 user-invocable: true
 allowed-tools: Bash, Read
 argument-hint: "[YYYY-MM-DD] [--force]"
@@ -8,9 +8,9 @@ argument-hint: "[YYYY-MM-DD] [--force]"
 
 ## タスク
 
-`articles/hatena/` 配下の生成済み日記記事を、はてなブログの AtomPub エンドポイントへ送信し下書き（`<app:draft>yes</app:draft>`）として登録する。投稿成功時に `articles/hatena/published.jsonl` へ記録を追記する。
+`articles/hatena/` 配下の生成済み日記記事を、はてなブログの AtomPub エンドポイントへ送信する。POST（新規投稿）時は下書き（`<app:draft>yes</app:draft>`）として登録する。投稿成功時に `articles/hatena/published.jsonl` へ記録を追記する。
 
-公開（`<app:draft>no</app:draft>`）の自動投稿は本スキルの対象外。下書き登録後の公開判断と「公開」操作はオーナーがはてなブログの管理画面で行う。
+更新（PUT, `--force`）時は事前に GET で対象エントリの `<app:control>/<app:draft>` 値を取得し、同じ値を明示送信して既存の公開状態を保持する（はてな AtomPub 公式仕様では `<app:draft>` を省略すると公開扱いになるため、明示送信が必須）。下書き ↔ 公開の状態遷移は本スキルの対象外で、はてなブログの管理画面での手動操作とする。
 
 仕様: `aidlc-docs/plan-work/issue-42.md`
 
@@ -91,16 +91,21 @@ python scripts/publish_hatena.py [<DATE>] [--force]
    - `--force` なし & 未登録 → POST を実行
 7. `.env` から `HATENA_ID` / `HATENA_BLOG_ID` を取得
 8. keyring から `HATENA_API_KEY` を取得
-9. Atom Entry XML を組み立て（`<title>` / `<updated>`（フロントマター `date:` を JST 0 時として ISO 8601 化、はてなブログ管理画面で公開予定日として表示される） / `<content type="text/x-markdown">` / `<app:draft>yes</app:draft>` / `<category term="...">`）
-10. Basic 認証でリクエスト送信
+9. **PUT (`--force`) 時のみ**: 対象 `edit_url` に対して **GET リクエスト** を発行し、レスポンスの `<app:control>/<app:draft>` 値を抽出する。取得失敗（HTTP エラー / XML パース失敗 / 要素不在）時はエラー停止
+10. Atom Entry XML を組み立て:
+    - `<title>` / `<updated>`（フロントマター `date:` を JST 0 時として ISO 8601 化、はてなブログ管理画面で公開予定日として表示される）
+    - `<content type="text/x-markdown">`
+    - `<category term="...">`
+    - `<app:control>/<app:draft>` を **必ず明示送信** する。POST 時は `yes`（下書き）、PUT 時はステップ 9 で取得した値（公開状態を維持）。はてな AtomPub 公式仕様では `<app:draft>` 省略時は公開扱いになるため、状態維持には明示が必須
+11. Basic 認証でリクエスト送信
     - POST 時: `https://blog.hatena.ne.jp/<HATENA_ID>/<HATENA_BLOG_ID>/atom/entry`
     - PUT 時: 取得済みの `edit_url`
-11. POST 成功時の `published.jsonl` 追記:
+12. POST 成功時の `published.jsonl` 追記:
     - レスポンスの `<link rel="edit" href="..."/>` を抽出し `{"date": "<日付>", "title": "<title>", "edit_url": "<URL>"}` 形式で 1 行 JSON を追記する
     - `edit_url` 抽出に失敗した場合: WARNING を出して `"edit_url": null` で追記する（次回 `--force` 前に手動書き換えが必要、終了コード `0`）
     - 追記が I/O 失敗した場合: WARNING + 追記すべき 1 行を明示し終了コード `1`（投稿自体は成功している点を明示）
-12. PUT 成功時は `published.jsonl` の該当行の `title` を最新タイトルに更新する（`edit_url` は既存値を保持、行追加はしない）
-13. レスポンスの `<link rel="alternate" href="..."/>`（公開閲覧 URL）と `<atom:id>` を画面表示する
+13. PUT 成功時は `published.jsonl` の該当行の `title` を最新タイトルに更新する（`edit_url` は既存値を保持、行追加はしない）
+14. レスポンスの `<link rel="alternate" href="..."/>`（公開閲覧 URL）と `<atom:id>` を画面表示する
 
 ### Phase 3: 結果報告
 
@@ -121,8 +126,10 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 
 ```text
 📄 対象記事: articles/hatena/YYYY-MM-DD-diary.md
+🔍 既存の draft 状態を取得中...
+  現在の状態: 公開 ／ 下書き
 🔄 PUT 中 (title: ...)
-✅ 下書き更新成功
+✅ 更新成功（公開状態を維持） ／ 更新成功（下書き状態を維持）    # GET で取得した状態に応じて表示が切り替わる
   記事: articles/hatena/...
   Entry ID: tag:blog.hatena.ne.jp,...:entry-...
   URL: https://<blog>/entry/...
@@ -151,13 +158,15 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 | HTTP 401 / 403 | API キーまたは権限不足。keyring 登録値とブログオーナー権限を確認 |
 | HTTP 404（PUT 時） | 指定 `edit_url` のエントリがはてな側に存在しない（手動削除済み等）。`published.jsonl` の該当行の `edit_url` を `null` に書き換え、通常 POST で再投稿する |
 | HTTP 5xx / タイムアウト | リトライは実装しない。少し時間を置いてから再実行する |
+| PUT 前 GET の失敗（HTTP エラー / ネットワーク失敗 / XML パース失敗 / `<app:draft>` 要素不在） | スクリプトがエラー表示 + 停止。PUT 自体は実行しない（draft 状態を確定できないため意図しない公開を起こさない）。原因を解消してから再実行する |
 | ネットワーク失敗（DNS / TCP / `URLError` / `TimeoutError`） | スクリプトは HTTP `-1` として扱い、`❌ ネットワークエラー: ...` を表示。少し時間を置いてから再実行する |
 | POST 成功後の `published.jsonl` 追記が I/O 失敗 | スクリプトが Entry ID・公開閲覧 URL を表示しつつ WARNING + 追記すべき 1 行を明示。終了コード `1`。投稿自体は成功しているため、明示された 1 行を `published.jsonl` に追記して整合を回復する |
 | POST 成功したがレスポンスから `edit_url` 抽出に失敗 | スクリプトが WARNING を出し、`"edit_url": null` で `published.jsonl` に追記する（終了コード `0`）。次回 `--force` 前に管理画面から AtomPub edit URL を確認して URL 文字列に書き換える必要がある |
 
 ## 注意事項
 
-- 本スキルは **下書きの登録（POST）と更新（`--force` 指定時の PUT）** のみ対応する。公開（`<app:draft>no</app:draft>`）はサポートしない。下書きの公開判断はオーナーが管理画面で行う
+- 本スキルは **下書きの登録（POST）と既存エントリの更新（`--force` 指定時の PUT）** に対応する。PUT 時は事前に GET で取得した `<app:draft>` 値をそのまま明示送信するため、公開状態を変更しない（公開済み記事は公開のまま、下書き記事は下書きのまま）。下書き ↔ 公開の状態遷移はオーナーが管理画面で行う
+- **既知制約 (TOCTOU)**: `--force` の PUT 実行中（GET と PUT の間）に、オーナーがはてなブログ管理画面で対象記事の下書き/公開状態を手動切替すると、PUT は古い値を送ってしまい意図せず状態を変える可能性がある。`--force` 実行中は管理画面操作を避けること。再現は実運用上ほぼ起きないが、既知の制約として明示する
 - 削除（DELETE）はサポートしない。誤投稿時はオーナーが管理画面で削除する
 - `--force` での PUT 対象は `published.jsonl` の `edit_url` が URL 文字列のエントリに限る。`edit_url` が `null` のエントリ（別環境投稿等で記録された場合）に `--force` を実行するとエラー停止するため、必要に応じて手動で `edit_url` を URL 文字列に書き換える
 - リトライは実装しない。一時的失敗時は少し時間を置いてから再実行する
