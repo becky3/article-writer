@@ -412,6 +412,14 @@ class BuildAtomEntryTest(unittest.TestCase):
         root = ET.fromstring(payload)
         self.assertIsNone(root.find("atom:updated", self.NS))
 
+    def test_draft_none_omits_app_control(self) -> None:
+        payload = publish_hatena.build_atom_entry(
+            title="t", body="b", category=None, draft=None
+        )
+        root = ET.fromstring(payload)
+        self.assertIsNone(root.find("app:control", self.NS))
+        self.assertIsNone(root.find("app:control/app:draft", self.NS))
+
 
 class BasicAuthHeaderTest(unittest.TestCase):
     def test_format(self) -> None:

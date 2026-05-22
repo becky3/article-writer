@@ -8,9 +8,9 @@ argument-hint: "[YYYY-MM-DD] [--force]"
 
 ## タスク
 
-`articles/hatena/` 配下の生成済み日記記事を、はてなブログの AtomPub エンドポイントへ送信し下書き（`<app:draft>yes</app:draft>`）として登録する。投稿成功時に `articles/hatena/published.jsonl` へ記録を追記する。
+`articles/hatena/` 配下の生成済み日記記事を、はてなブログの AtomPub エンドポイントへ送信する。POST（新規投稿）時は下書き（`<app:draft>yes</app:draft>`）として登録する。投稿成功時に `articles/hatena/published.jsonl` へ記録を追記する。
 
-公開（`<app:draft>no</app:draft>`）の自動投稿は本スキルの対象外。下書き登録後の公開判断と「公開」操作はオーナーがはてなブログの管理画面で行う。
+公開済み記事の更新（PUT, `--force`）時は `<app:control>` 要素自体を省略して送信し、はてな側の既存の公開状態を保持する。下書き ↔ 公開の状態遷移は本スキルの対象外で、はてなブログの管理画面での手動操作とする。
 
 仕様: `aidlc-docs/plan-work/issue-42.md`
 
@@ -91,7 +91,7 @@ python scripts/publish_hatena.py [<DATE>] [--force]
    - `--force` なし & 未登録 → POST を実行
 7. `.env` から `HATENA_ID` / `HATENA_BLOG_ID` を取得
 8. keyring から `HATENA_API_KEY` を取得
-9. Atom Entry XML を組み立て（`<title>` / `<updated>`（フロントマター `date:` を JST 0 時として ISO 8601 化、はてなブログ管理画面で公開予定日として表示される） / `<content type="text/x-markdown">` / `<app:draft>yes</app:draft>` / `<category term="...">`）
+9. Atom Entry XML を組み立て（`<title>` / `<updated>`（フロントマター `date:` を JST 0 時として ISO 8601 化、はてなブログ管理画面で公開予定日として表示される） / `<content type="text/x-markdown">` / `<category term="...">` / `<app:control>` 要素は POST 時のみ `<app:draft>yes</app:draft>` を含めて送る。PUT (`--force`) 時は `<app:control>` 要素自体を **省略** し、はてな側の既存の公開状態（公開済み記事は公開のまま / 下書き記事は下書きのまま）を保持する。下書き ↔ 公開の状態遷移ははてなブログ管理画面での手動操作とする）
 10. Basic 認証でリクエスト送信
     - POST 時: `https://blog.hatena.ne.jp/<HATENA_ID>/<HATENA_BLOG_ID>/atom/entry`
     - PUT 時: 取得済みの `edit_url`
@@ -157,7 +157,7 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 
 ## 注意事項
 
-- 本スキルは **下書きの登録（POST）と更新（`--force` 指定時の PUT）** のみ対応する。公開（`<app:draft>no</app:draft>`）はサポートしない。下書きの公開判断はオーナーが管理画面で行う
+- 本スキルは **下書きの登録（POST）と既存エントリの更新（`--force` 指定時の PUT）** に対応する。PUT は `<app:control>` 要素を省略するため公開状態を変更しない（公開済み記事は公開のまま、下書き記事は下書きのまま）。下書き ↔ 公開の状態遷移はオーナーが管理画面で行う
 - 削除（DELETE）はサポートしない。誤投稿時はオーナーが管理画面で削除する
 - `--force` での PUT 対象は `published.jsonl` の `edit_url` が URL 文字列のエントリに限る。`edit_url` が `null` のエントリ（別環境投稿等で記録された場合）に `--force` を実行するとエラー停止するため、必要に応じて手動で `edit_url` を URL 文字列に書き換える
 - リトライは実装しない。一時的失敗時は少し時間を置いてから再実行する

@@ -229,13 +229,16 @@ def build_atom_entry(
     title: str,
     body: str,
     category: str | None,
-    draft: bool,
+    draft: bool | None,
     published_iso: str | None = None,
 ) -> bytes:
     """AtomPub Atom Entry XML を組み立てる.
 
     `<content type="text/x-markdown">` で Markdown を直接送信する。
-    `<app:draft>yes/no</app:draft>` で下書き/公開を切り替える。
+    `draft` が `True`/`False` のとき `<app:draft>yes/no</app:draft>` を送信して
+    下書き/公開を切り替える。`draft` が `None` のときは `<app:control>` 要素自体を
+    省略し、はてな側の既存の公開状態を保持する（PUT 更新時に公開済み記事を
+    下書きへ戻さないため）。
     `published_iso` が指定された場合は `<updated>` 要素を出力し、はてなブログの
     公開日時としてその値を使う（下書き状態でも公開時に指定日時で表示される）。
     """
@@ -252,8 +255,9 @@ def build_atom_entry(
     ET.SubElement(root, "content", {"type": "text/x-markdown"}).text = body
     if category:
         ET.SubElement(root, "category", {"term": category})
-    control = ET.SubElement(root, "app:control")
-    ET.SubElement(control, "app:draft").text = "yes" if draft else "no"
+    if draft is not None:
+        control = ET.SubElement(root, "app:control")
+        ET.SubElement(control, "app:draft").text = "yes" if draft else "no"
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
@@ -502,11 +506,13 @@ def main(argv: list[str] | None = None) -> int:
     # 公開時にこの日時が記事の公開日として表示される。
     published_iso = f"{diary_date}T00:00:00+09:00"
 
+    # PUT (--force) では <app:draft> を省略し、はてな側の既存公開状態を保持する。
+    # POST (新規) は下書き登録のため draft=True。
     payload = build_atom_entry(
         title=title,
         body=body,
         category=category,
-        draft=True,
+        draft=None if args.force else True,
         published_iso=published_iso,
     )
 
