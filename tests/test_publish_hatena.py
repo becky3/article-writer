@@ -14,6 +14,7 @@ import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
+from unittest.mock import MagicMock, patch
 
 # scripts/ を import path に追加
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts"))
@@ -412,13 +413,141 @@ class BuildAtomEntryTest(unittest.TestCase):
         root = ET.fromstring(payload)
         self.assertIsNone(root.find("atom:updated", self.NS))
 
-    def test_draft_none_omits_app_control(self) -> None:
-        payload = publish_hatena.build_atom_entry(
-            title="t", body="b", category=None, draft=None
+
+class FetchEntryDraftStatusTest(unittest.TestCase):
+    """fetch_entry_draft_status のテスト. urlopen を mock して挙動を検証する."""
+
+    NS_HEADER = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<entry xmlns="http://www.w3.org/2005/Atom" '
+        'xmlns:app="http://www.w3.org/2007/app">'
+    )
+
+    def _make_response(self, body: bytes):
+        ctx = MagicMock()
+        ctx.__enter__ = MagicMock(return_value=MagicMock(read=lambda: body))
+        ctx.__exit__ = MagicMock(return_value=False)
+        return ctx
+
+    def test_returns_true_when_draft_yes(self) -> None:
+        body = (
+            f"{self.NS_HEADER}"
+            "<title>t</title>"
+            "<app:control><app:draft>yes</app:draft></app:control>"
+            "</entry>"
+        ).encode("utf-8")
+        with patch("urllib.request.urlopen", return_value=self._make_response(body)):
+            result = publish_hatena.fetch_entry_draft_status(
+                edit_url="https://example.com/edit/1",
+                hatena_id="user",
+                api_key="key",
+            )
+        self.assertTrue(result)
+
+    def test_returns_false_when_draft_no(self) -> None:
+        body = (
+            f"{self.NS_HEADER}"
+            "<title>t</title>"
+            "<app:control><app:draft>no</app:draft></app:control>"
+            "</entry>"
+        ).encode("utf-8")
+        with patch("urllib.request.urlopen", return_value=self._make_response(body)):
+            result = publish_hatena.fetch_entry_draft_status(
+                edit_url="https://example.com/edit/1",
+                hatena_id="user",
+                api_key="key",
+            )
+        self.assertFalse(result)
+
+    def test_raises_when_app_control_missing(self) -> None:
+        body = (
+            f"{self.NS_HEADER}<title>t</title></entry>"
+        ).encode("utf-8")
+        with patch("urllib.request.urlopen", return_value=self._make_response(body)):
+            with self.assertRaises(RuntimeError) as ctx:
+                publish_hatena.fetch_entry_draft_status(
+                    edit_url="https://example.com/edit/1",
+                    hatena_id="user",
+                    api_key="key",
+                )
+            self.assertIn("app:control", str(ctx.exception))
+
+    def test_raises_when_draft_element_missing(self) -> None:
+        body = (
+            f"{self.NS_HEADER}"
+            "<title>t</title>"
+            "<app:control></app:control>"
+            "</entry>"
+        ).encode("utf-8")
+        with patch("urllib.request.urlopen", return_value=self._make_response(body)):
+            with self.assertRaises(RuntimeError) as ctx:
+                publish_hatena.fetch_entry_draft_status(
+                    edit_url="https://example.com/edit/1",
+                    hatena_id="user",
+                    api_key="key",
+                )
+            self.assertIn("app:draft", str(ctx.exception))
+
+    def test_raises_when_draft_text_is_empty(self) -> None:
+        body = (
+            f"{self.NS_HEADER}"
+            "<title>t</title>"
+            "<app:control><app:draft/></app:control>"
+            "</entry>"
+        ).encode("utf-8")
+        with patch("urllib.request.urlopen", return_value=self._make_response(body)):
+            with self.assertRaises(RuntimeError) as ctx:
+                publish_hatena.fetch_entry_draft_status(
+                    edit_url="https://example.com/edit/1",
+                    hatena_id="user",
+                    api_key="key",
+                )
+            self.assertIn("テキスト値", str(ctx.exception))
+
+    def test_raises_when_draft_value_invalid(self) -> None:
+        body = (
+            f"{self.NS_HEADER}"
+            "<title>t</title>"
+            "<app:control><app:draft>true</app:draft></app:control>"
+            "</entry>"
+        ).encode("utf-8")
+        with patch("urllib.request.urlopen", return_value=self._make_response(body)):
+            with self.assertRaises(RuntimeError) as ctx:
+                publish_hatena.fetch_entry_draft_status(
+                    edit_url="https://example.com/edit/1",
+                    hatena_id="user",
+                    api_key="key",
+                )
+            self.assertIn("想定外", str(ctx.exception))
+
+    def test_raises_on_http_error(self) -> None:
+        import urllib.error
+        err = urllib.error.HTTPError(
+            url="https://example.com/edit/1",
+            code=404,
+            msg="Not Found",
+            hdrs=None,
+            fp=None,
         )
-        root = ET.fromstring(payload)
-        self.assertIsNone(root.find("app:control", self.NS))
-        self.assertIsNone(root.find("app:control/app:draft", self.NS))
+        with patch("urllib.request.urlopen", side_effect=err):
+            with self.assertRaises(RuntimeError) as ctx:
+                publish_hatena.fetch_entry_draft_status(
+                    edit_url="https://example.com/edit/1",
+                    hatena_id="user",
+                    api_key="key",
+                )
+            self.assertIn("404", str(ctx.exception))
+
+    def test_raises_on_xml_parse_error(self) -> None:
+        body = b"not xml at all"
+        with patch("urllib.request.urlopen", return_value=self._make_response(body)):
+            with self.assertRaises(RuntimeError) as ctx:
+                publish_hatena.fetch_entry_draft_status(
+                    edit_url="https://example.com/edit/1",
+                    hatena_id="user",
+                    api_key="key",
+                )
+            self.assertIn("パース失敗", str(ctx.exception))
 
 
 class BasicAuthHeaderTest(unittest.TestCase):
