@@ -26,6 +26,7 @@ import html
 import pathlib
 import re
 import sys
+from datetime import datetime, timedelta
 
 from article_syntax import (
     BALLOON_MARKER_SUFFIX,
@@ -205,7 +206,26 @@ def _parse_bluesky_fields(lines: list[str], block_start_lineno: int) -> dict[str
         raise ConvertError(
             f"行 {block_start_lineno}: bluesky ブロックに必須キー欠落: {', '.join(missing)}",
         )
+    _validate_created_at_jst(fields["created-at"], block_start_lineno)
     return fields
+
+
+def _validate_created_at_jst(value: str, lineno: int) -> None:
+    """``created-at`` が JST ISO 8601 形式（``+09:00`` オフセット）であることを検証する."""
+    try:
+        dt = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ConvertError(
+            f"行 {lineno}: bluesky ブロックの 'created-at' が ISO 8601 として解釈できません: {value!r}",
+        ) from exc
+    if dt.tzinfo is None:
+        raise ConvertError(
+            f"行 {lineno}: bluesky ブロックの 'created-at' にタイムゾーン情報がありません: {value!r}",
+        )
+    if dt.utcoffset() != timedelta(hours=9):
+        raise ConvertError(
+            f"行 {lineno}: bluesky ブロックの 'created-at' は JST（オフセット '+09:00'）で指定してください: {value!r}",
+        )
 
 
 class ConvertError(Exception):

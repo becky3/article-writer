@@ -141,9 +141,11 @@ argument-hint: "[YYYY-MM-DD | MM-DD | <日付>..<日付>] [--auto-publish]"
     | `rkey` | `post.uri` の末尾（`at://<did>/app.bsky.feed.post/<rkey>` の `<rkey>` 部分） |
     | `handle` | `post.author.handle` |
     | `display-name` | `post.author.displayName` |
-    | `created-at` | `post.record.createdAt` |
+    | `created-at` | `post.record.createdAt` を `python scripts/convert_utc_to_jst.py <値>` に通して得た JST ISO 8601 文字列（`+09:00` オフセット付き） |
     | `text` | `post.record.text` |
     | `lang` | `post.record.langs[0]`（任意。省略時は `{{{bluesky ... }}}` 側のデフォルト `ja` が適用される） |
+
+    Bluesky 投稿の時刻情報は本記事全体で JST として扱うこと（時刻への直接言及・前後関係・暗示的な時系列描写を含む全ての記述において）。
 
 ### Phase 2.5: ループ前準備（共通リソース読み込み）
 
