@@ -1,7 +1,7 @@
 """convert_article_html.py のユニットテスト.
 
 仕様: .claude/skills/write-hatena-diary/balloon-html.md
-計画: aidlc-docs/plan-work/issue-60.md (テスト方針)
+計画: aidlc-docs/plan-work/issue-60.md, issue-131.md (テスト方針)
 
 実行:
 
@@ -273,7 +273,7 @@ class BlueskyConvertTest(unittest.TestCase):
             "rkey": "3lmnopqr",
             "handle": "example.bsky.social",
             "display-name": "表示名",
-            "created-at": "2026-05-14T01:33:34.400Z",
+            "created-at": "2026-05-14T10:33:34.400+09:00",
             "lang": "ja",
             "text": text,
         })
@@ -306,7 +306,7 @@ class BlueskyConvertTest(unittest.TestCase):
             "rkey": "3xyz",
             "handle": "h.bsky.social",
             "display-name": "name",
-            "created-at": "2026-05-14T00:00:00Z",
+            "created-at": "2026-05-14T09:00:00+09:00",
             "text": "hi",
         })
         out = convert_article_html.convert(block)
@@ -326,7 +326,7 @@ class BlueskyConvertTest(unittest.TestCase):
             "rkey=3xyz\n"
             "handle=h.bsky.social\n"
             "display-name=name\n"
-            "created-at=2026-05-14T00:00:00Z\n"
+            "created-at=2026-05-14T09:00:00+09:00\n"
             "text=1 行目\n"
             "2 行目\n"
             "3 行目\n"
@@ -343,7 +343,7 @@ class BlueskyConvertTest(unittest.TestCase):
             "rkey": "3xyz",
             "handle": "h.bsky.social",
             "display-name": "name",
-            "created-at": "2026-05-14T00:00:00Z",
+            "created-at": "2026-05-14T09:00:00+09:00",
             "text": "hi",
         })
         out = convert_article_html.convert(block)
@@ -357,7 +357,7 @@ class BlueskyConvertTest(unittest.TestCase):
             "rkey": "3xyz",
             "handle": "h.bsky.social",
             "display-name": "name",
-            "created-at": "2026-05-14T00:00:00Z",
+            "created-at": "2026-05-14T09:00:00+09:00",
             "text": "hi",
         })
         with self.assertRaises(convert_article_html.ConvertError):
@@ -370,7 +370,7 @@ class BlueskyConvertTest(unittest.TestCase):
             "rkey": "3xyz",
             "handle": "h.bsky.social",
             "display-name": "name",
-            "created-at": "2026-05-14T00:00:00Z",
+            "created-at": "2026-05-14T09:00:00+09:00",
             "extra": "おかしなキー",
             "text": "hi",
         })
@@ -386,7 +386,7 @@ class BlueskyConvertTest(unittest.TestCase):
             "rkey=3xyz\n"
             "handle=h.bsky.social\n"
             "display-name=name\n"
-            "created-at=2026-05-14T00:00:00Z\n"
+            "created-at=2026-05-14T09:00:00+09:00\n"
             "text=hi\n"
         )
         with self.assertRaises(convert_article_html.ConvertError):
@@ -414,7 +414,7 @@ class BlueskyConvertTest(unittest.TestCase):
             "rkey=3xyz\n"
             "handle=h.bsky.social\n"
             "display-name=name\n"
-            "created-at=2026-05-14T00:00:00Z\n"
+            "created-at=2026-05-14T09:00:00+09:00\n"
             "text=hi\n"
             f"{BLUESKY_CLOSE_TOKEN}\n"
         )
@@ -431,7 +431,7 @@ class BlueskyConvertTest(unittest.TestCase):
             "rkey=3xyz\n"
             "handle=h.bsky.social\n"
             "display-name=name\n"
-            "created-at=2026-05-14T00:00:00Z\n"
+            "created-at=2026-05-14T09:00:00+09:00\n"
             "text=以下は引用です\n"
             "kuro-chan>>これは Bluesky の投稿本文の一部であって balloon ではない\n"
             "{{{bluesky の説明をしている文章\n"
@@ -452,6 +452,84 @@ class BlueskyConvertTest(unittest.TestCase):
             convert_article_html.convert(src)
 
 
+class BlueskyCreatedAtJstValidationTest(unittest.TestCase):
+    """``created-at`` が JST ``+09:00`` オフセットで指定されることを検証する."""
+
+    @staticmethod
+    def _block_with_created_at(created_at: str) -> str:
+        return _bluesky({
+            "did": "did:plc:abc",
+            "cid": "bafyabc",
+            "rkey": "3xyz",
+            "handle": "h.bsky.social",
+            "display-name": "name",
+            "created-at": created_at,
+            "text": "hi",
+        })
+
+    def test_jst_offset_accepted(self) -> None:
+        out = convert_article_html.convert(
+            self._block_with_created_at("2026-05-14T09:00:00+09:00")
+        )
+        self.assertIn("2026-05-14T09:00:00+09:00", out)
+
+    def test_jst_offset_with_milliseconds_accepted(self) -> None:
+        out = convert_article_html.convert(
+            self._block_with_created_at("2026-05-14T09:00:00.400+09:00")
+        )
+        self.assertIn("2026-05-14T09:00:00.400+09:00", out)
+
+    def test_utc_z_suffix_rejected(self) -> None:
+        with self.assertRaises(convert_article_html.ConvertError) as ctx:
+            convert_article_html.convert(
+                self._block_with_created_at("2026-05-14T00:00:00Z")
+            )
+        self.assertIn("created-at", str(ctx.exception))
+
+    def test_utc_plus_zero_offset_rejected(self) -> None:
+        with self.assertRaises(convert_article_html.ConvertError):
+            convert_article_html.convert(
+                self._block_with_created_at("2026-05-14T00:00:00+00:00")
+            )
+
+    def test_naive_datetime_rejected(self) -> None:
+        with self.assertRaises(convert_article_html.ConvertError):
+            convert_article_html.convert(
+                self._block_with_created_at("2026-05-14T00:00:00")
+            )
+
+    def test_non_jst_offset_rejected(self) -> None:
+        with self.assertRaises(convert_article_html.ConvertError):
+            convert_article_html.convert(
+                self._block_with_created_at("2026-05-14T00:00:00+05:30")
+            )
+
+    def test_unparseable_value_rejected(self) -> None:
+        with self.assertRaises(convert_article_html.ConvertError):
+            convert_article_html.convert(
+                self._block_with_created_at("not-a-date")
+            )
+
+    def test_error_line_points_to_created_at_line(self) -> None:
+        # block 開始行ではなく created-at= の実際の行を指していること
+        src = (
+            "通常段落\n"
+            "\n"
+            f"{BLUESKY_OPEN_TOKEN}\n"      # 行 3 = block 開始
+            "did=did:plc:abc\n"             # 行 4
+            "cid=bafyabc\n"                 # 行 5
+            "rkey=3xyz\n"                   # 行 6
+            "handle=h.bsky.social\n"        # 行 7
+            "display-name=name\n"           # 行 8
+            "created-at=2026-05-14T00:00:00Z\n"  # 行 9 (← エラー対象)
+            "text=hi\n"                     # 行 10
+            f"{BLUESKY_CLOSE_TOKEN}\n"
+        )
+        with self.assertRaises(convert_article_html.ConvertError) as ctx:
+            convert_article_html.convert(src)
+        self.assertIn("行 9:", str(ctx.exception))
+
+
 class MixedConvertTest(unittest.TestCase):
     def test_balloon_and_bluesky_coexist(self) -> None:
         src = (
@@ -463,7 +541,7 @@ class MixedConvertTest(unittest.TestCase):
                 "rkey": "3a",
                 "handle": "h.bsky.social",
                 "display-name": "n",
-                "created-at": "2026-05-14T00:00:00Z",
+                "created-at": "2026-05-14T09:00:00+09:00",
                 "text": "t",
             })
             + "\n"
