@@ -82,11 +82,31 @@ class ConvertUtcToJstTest(unittest.TestCase):
             convert_utc_to_jst.convert("2026-03-19T07:04:25.663+09:00")
         self.assertIn("既に JST", str(ctx.exception))
 
-    def test_four_digit_fractional_rejected(self) -> None:
-        # Python 3.10 の fromisoformat は 3 桁・6 桁以外のミリ秒桁数を受け付けない。
-        # Bluesky API 仕様変更等で 4 桁が来たら ISO 8601 解釈エラーになる挙動境界の明文化
-        with self.assertRaises(ValueError):
-            convert_utc_to_jst.convert("2026-03-18T22:04:25.6630Z")
+    def test_one_digit_fractional(self) -> None:
+        self.assertEqual(
+            convert_utc_to_jst.convert("2026-03-18T22:04:25.6Z"),
+            "2026-03-19T07:04:25.6+09:00",
+        )
+
+    def test_four_digit_fractional_preserved(self) -> None:
+        # ISO 8601 仕様は任意桁を許容するため、stdlib 制約を内部で吸収して入力桁数を保持する
+        self.assertEqual(
+            convert_utc_to_jst.convert("2026-03-18T22:04:25.6630Z"),
+            "2026-03-19T07:04:25.6630+09:00",
+        )
+
+    def test_five_digit_fractional_preserved(self) -> None:
+        self.assertEqual(
+            convert_utc_to_jst.convert("2026-03-18T22:04:25.66301Z"),
+            "2026-03-19T07:04:25.66301+09:00",
+        )
+
+    def test_seven_digit_fractional_truncated_to_six(self) -> None:
+        # stdlib の datetime はマイクロ秒（6 桁）までしか保持できないため、7 桁以上は 6 桁にトランケート
+        self.assertEqual(
+            convert_utc_to_jst.convert("2026-03-18T22:04:25.6630001Z"),
+            "2026-03-19T07:04:25.663000+09:00",
+        )
 
     def test_non_utc_offset_rejected(self) -> None:
         # +05:30 等の非 UTC オフセットはエラー

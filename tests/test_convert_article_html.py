@@ -510,6 +510,25 @@ class BlueskyCreatedAtJstValidationTest(unittest.TestCase):
                 self._block_with_created_at("not-a-date")
             )
 
+    def test_error_line_points_to_created_at_line(self) -> None:
+        # block 開始行ではなく created-at= の実際の行を指していること
+        src = (
+            "通常段落\n"
+            "\n"
+            f"{BLUESKY_OPEN_TOKEN}\n"      # 行 3 = block 開始
+            "did=did:plc:abc\n"             # 行 4
+            "cid=bafyabc\n"                 # 行 5
+            "rkey=3xyz\n"                   # 行 6
+            "handle=h.bsky.social\n"        # 行 7
+            "display-name=name\n"           # 行 8
+            "created-at=2026-05-14T00:00:00Z\n"  # 行 9 (← エラー対象)
+            "text=hi\n"                     # 行 10
+            f"{BLUESKY_CLOSE_TOKEN}\n"
+        )
+        with self.assertRaises(convert_article_html.ConvertError) as ctx:
+            convert_article_html.convert(src)
+        self.assertIn("行 9:", str(ctx.exception))
+
 
 class MixedConvertTest(unittest.TestCase):
     def test_balloon_and_bluesky_coexist(self) -> None:

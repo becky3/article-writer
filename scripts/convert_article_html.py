@@ -174,6 +174,7 @@ def _parse_bluesky_fields(lines: list[str], block_start_lineno: int) -> dict[str
     必須キーの欠落・未知キーは ``ConvertError`` で停止する。
     """
     fields: dict[str, str] = {}
+    created_at_lineno = block_start_lineno
     text_lines: list[str] | None = None
     for offset, line in enumerate(lines):
         if text_lines is not None:
@@ -194,6 +195,8 @@ def _parse_bluesky_fields(lines: list[str], block_start_lineno: int) -> dict[str
             text_lines = [value]
         else:
             fields[key] = value
+            if key == "created-at":
+                created_at_lineno = block_start_lineno + offset + 1
     if text_lines is not None:
         fields["text"] = "\n".join(text_lines)
     elif "text" not in fields:
@@ -206,7 +209,7 @@ def _parse_bluesky_fields(lines: list[str], block_start_lineno: int) -> dict[str
         raise ConvertError(
             f"行 {block_start_lineno}: bluesky ブロックに必須キー欠落: {', '.join(missing)}",
         )
-    _validate_created_at_jst(fields["created-at"], block_start_lineno)
+    _validate_created_at_jst(fields["created-at"], created_at_lineno)
     return fields
 
 
