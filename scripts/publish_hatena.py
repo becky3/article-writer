@@ -11,7 +11,7 @@
 5. リポジトリルートの .env から HATENA_ID / HATENA_BLOG_ID を取得
 6. keyring から HATENA_API_KEY を取得（service="article-writer"）
 7. --force 時のみ: edit_url に対して GET し、レスポンスの `<app:control>/<app:draft>` 値（yes / no）を取得する
-8. AtomPub Atom Entry XML を組み立て（`<title>` / `<updated>` / `<content type="text/x-markdown">` / `<app:draft>` は POST 時 `yes` 固定、PUT 時はステップ 7 で取得した値を明示送信 / `<category>`）
+8. AtomPub Atom Entry XML を組み立て（`<title>` / `<updated>` / `<content type="text/x-markdown">` / `<app:control>/<app:draft>` は POST 時 `yes` 固定、PUT 時はステップ 7 で取得した値を明示送信 / `<category>`）
 9. Basic 認証で --force なしは POST、--force ありは既存 edit_url へ PUT
 10. POST 成功時 published.jsonl に 1 行 JSON を追記、PUT 成功時は title を最新タイトルに更新（edit_url 保持）
 
