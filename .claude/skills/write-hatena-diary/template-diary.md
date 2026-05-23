@@ -1,7 +1,7 @@
 # 日記テンプレート (write-hatena-diary)
 
 本ファイルは `/write-hatena-diary` スキルが記事生成時に参照するテンプレート（雛形・参照データ）。
-記述ルールは `quality-guidelines.md` Part 2 を SSoT として参照する。
+記述ルールは `quality-guidelines.md`（恒久ルール）と `narrative-guidelines.md`（物語世界）を SSoT として参照する。
 
 記事の構造は本ファイルの並びに従う:
 
