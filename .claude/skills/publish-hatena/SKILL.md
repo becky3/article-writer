@@ -81,7 +81,7 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 1. 対象記事の選択（`DATE` 指定時はファイル名前方一致、未指定時は最新）
 2. フロントマター（`title` / `date` / `category`）解析と本文取得
 3. 本文先頭の `# <title>` 行剥がし（はてなブログはエントリ title を別管理するため重複を避ける）
-4. **簡素記法ブロックを HTML に展開**: `scripts/convert_article_html.py` の `convert()` を呼び、`:::kuro-chan` / `:::nee-san` / `:::bluesky` を対応 HTML へ変換する（記法仕様は `.claude/skills/write-hatena-diary/balloon-html.md`）。変換エラー時はスクリプト全体を停止
+4. **簡素記法ブロックを HTML に展開**: `scripts/convert_article_html.py` の `convert()` を呼び、`kuro-chan>>` / `nee-san>>` / `{{{bluesky ... }}}` を対応 HTML へ変換する（記法仕様は `.claude/skills/write-hatena-diary/balloon-html.md`）。変換エラー時はスクリプト全体を停止
 5. `published.jsonl` から対象日付のエントリを検索し、登録状態（未登録 / 登録済みで `edit_url` が `null` / 登録済みで `edit_url` が URL 文字列）を判定する
 6. `--force` 分岐の確定:
    - `--force` なし & 対象日付が登録済み → 重複警告で停止
@@ -151,7 +151,7 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 | 引数の日付形式が不正 | スクリプトがエラー表示 + 停止 |
 | フロントマター（`title` / `date`）が未設定 | スクリプトがエラー表示 + 停止 |
 | フロントマター `date:` が `YYYY-MM-DD` 形式でない | スクリプトがエラー表示 + 停止（`<updated>` 組み立て前に検証する） |
-| 簡素記法ブロック（`:::kuro-chan` / `:::nee-san` / `:::bluesky`）の構文エラー（未閉鎖・必須キー欠落等） | スクリプトがエラー表示 + 停止。エラーメッセージは行番号付き |
+| 簡素記法ブロック（`kuro-chan>>` / `nee-san>>` / `{{{bluesky ... }}}`）の構文エラー（未閉鎖・必須キー欠落等） | スクリプトがエラー表示 + 停止。エラーメッセージは行番号付き |
 | 同じ日付のエントリが既に `published.jsonl` に存在（重複検知、`--force` なし） | スクリプトが警告 + 停止。再投稿が妥当なら `--force` で再実行する |
 | `--force` 指定だが対象日付のエントリが `published.jsonl` に未登録 | スクリプトがエラー停止。`--force` は更新専用のため、新規投稿時は `--force` を外して再実行する |
 | `--force` 指定だが対象日付のエントリに `edit_url` が `null` | スクリプトがエラー停止 + 手動書き換えの手順を案内。はてなブログ管理画面から AtomPub edit URL を取得し、`published.jsonl` の該当行の `edit_url` を `null` から URL 文字列に書き換えてから再実行する |
