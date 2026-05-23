@@ -82,7 +82,7 @@
 - 記法仕様は `balloon-html.md` 参照
 - 1 投稿 = 1 ブロック
 - 該当投稿が 0 件なら Bluesky 関連シーンを省略
-- 引用ブロック直後のペルソナコメント運用・引用の前提・関係性は `narrative-guidelines.md`「Bluesky 投稿の物語前提」を参照
+- 引用ブロック直後のペルソナコメント運用・引用の前提・関係性は `narrative-guidelines.md`「Bluesky 引用部の運用」を参照
 
 ## 一次情報の重視
 
