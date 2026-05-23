@@ -34,7 +34,7 @@ argument-hint: "[YYYY-MM-DD] [--force]"
 | `HATENA_ID` | リポジトリルートの `.env` | はてなのユーザー名（公開情報） |
 | `HATENA_BLOG_ID` | リポジトリルートの `.env` | ブログのホスト名（`<subdomain>.hatenablog.com` 形式、公開情報） |
 | `HATENA_API_KEY` | keyring（`service="article-writer"`） | AtomPub 用 API キー（秘匿情報。ダッシュボード → 設定 → 詳細設定 → AtomPub の「APIキー」） |
-| 投稿先ブログの編集モード | はてなブログの基本設定 | **Markdown** に設定済み（運用前提。詳細は `.claude/skills/write-hatena-diary/quality-guidelines.md` Part 2「記法」を参照） |
+| 投稿先ブログの編集モード | はてなブログの基本設定 | **Markdown** に設定済み（運用前提。詳細は `.claude/skills/write-hatena-diary/quality-guidelines.md`「記法」を参照） |
 
 `.env` は `.gitignore` 済み。`HATENA_API_KEY` の値はオーナー手元のみで管理する秘匿情報で、本スキルから値を出力・記録しない。keyring 登録の具体コマンドは <<## エラーハンドリング一覧@self>> を参照。
 
