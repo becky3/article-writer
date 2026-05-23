@@ -446,6 +446,74 @@ class ProcessTargetsTest(unittest.TestCase):
         self.assertTrue(t3.article_path.exists())
 
 
+class JsonlRewriteErrorTest(unittest.TestCase):
+    """rewrite_published_jsonl の OSError 捕捉と error_msg への組み込みをテスト."""
+
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.articles_dir = pathlib.Path(self.tmpdir.name) / "articles"
+        self.articles_dir.mkdir()
+        self.jsonl_path = self.articles_dir / "published.jsonl"
+
+    def _make_target(self, date: str, *, edit_url: str | None) -> delete_hatena.Target:
+        path = self.articles_dir / f"{date}-diary.md"
+        path.write_text("dummy", encoding="utf-8")
+        entry = {"date": date, "title": "t", "edit_url": edit_url}
+        return delete_hatena.Target(
+            date=date, article_path=path, title="t", entry=entry,
+        )
+
+    def test_success_path_oserror_returns_error_msg(self) -> None:
+        """全件成功後の jsonl 書換が OSError の場合、終了コード 1 + エラーメッセージで返る."""
+        target = self._make_target("2026-05-01", edit_url="u1")
+        self.jsonl_path.write_text(
+            json.dumps({"date": "2026-05-01", "title": "t", "edit_url": "u1"})
+            + "\n",
+            encoding="utf-8",
+        )
+        with patch.object(delete_hatena, "PUBLISHED_JSONL", self.jsonl_path), \
+             patch.object(delete_hatena, "REPO_ROOT", pathlib.Path(self.tmpdir.name)), \
+             patch.object(delete_hatena, "_atompub_request", return_value=(200, b"")), \
+             patch.object(
+                 delete_hatena, "rewrite_published_jsonl",
+                 side_effect=OSError("disk full"),
+             ):
+            results, pending, error = delete_hatena.process_targets(
+                [target], remote_only=False, local_only=False,
+                hatena_id="u", api_key="k",
+            )
+        self.assertIsNotNone(error)
+        self.assertIn("jsonl 書き換え失敗", error)
+        self.assertIn("disk full", error)
+
+    def test_failure_path_oserror_appends_to_error_msg(self) -> None:
+        """削除失敗 + jsonl 書換も失敗のケース、両方のエラーが error_msg に含まれる."""
+        err = urllib.error.HTTPError(
+            url="https://example.com/e/1",
+            code=500,
+            msg="Server Error",
+            hdrs=None,  # type: ignore[arg-type]
+            fp=None,
+        )
+        target = self._make_target("2026-05-01", edit_url="u1")
+        with patch.object(delete_hatena, "PUBLISHED_JSONL", self.jsonl_path), \
+             patch.object(delete_hatena, "REPO_ROOT", pathlib.Path(self.tmpdir.name)), \
+             patch.object(delete_hatena, "_atompub_request", side_effect=err), \
+             patch.object(
+                 delete_hatena, "rewrite_published_jsonl",
+                 side_effect=OSError("disk full"),
+             ):
+            results, pending, error = delete_hatena.process_targets(
+                [target], remote_only=False, local_only=False,
+                hatena_id="u", api_key="k",
+            )
+        self.assertIsNotNone(error)
+        self.assertIn("500", error)
+        self.assertIn("jsonl 書き換えも失敗", error)
+        self.assertIn("disk full", error)
+
+
 class MainExclusiveOptionsTest(unittest.TestCase):
     """main の排他オプション・引数バリデーション."""
 

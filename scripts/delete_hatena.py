@@ -341,13 +341,33 @@ def process_targets(
                     remove_dates.add(t.date)
         except (RuntimeError, OSError) as e:
             result.error = str(e)
-            rewrite_published_jsonl(
-                remove_dates=remove_dates, nullify_dates=nullify_dates
-            )
+            jsonl_error = _safe_rewrite_published_jsonl(remove_dates, nullify_dates)
             pending = [u.date for u in targets[i + 1:]]
-            return results, pending, str(e)
-    rewrite_published_jsonl(remove_dates=remove_dates, nullify_dates=nullify_dates)
+            error_msg = str(e)
+            if jsonl_error is not None:
+                error_msg = f"{error_msg} / さらに jsonl 書き換えも失敗: {jsonl_error}"
+            return results, pending, error_msg
+    jsonl_error = _safe_rewrite_published_jsonl(remove_dates, nullify_dates)
+    if jsonl_error is not None:
+        return results, [], f"jsonl 書き換え失敗: {jsonl_error}"
     return results, [], None
+
+
+def _safe_rewrite_published_jsonl(
+    remove_dates: set[str], nullify_dates: set[str]
+) -> str | None:
+    """rewrite_published_jsonl を OSError を捕捉して呼び出す.
+
+    Returns:
+        失敗時はエラーメッセージ、成功時 None
+    """
+    try:
+        rewrite_published_jsonl(
+            remove_dates=remove_dates, nullify_dates=nullify_dates
+        )
+    except OSError as e:
+        return str(e)
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
