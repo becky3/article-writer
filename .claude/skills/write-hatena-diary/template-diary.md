@@ -78,7 +78,7 @@ category: "diary"
 | [`knowledge-ingest-pipeline`](https://github.com/becky3/knowledge-ingest-pipeline) | RSS から記事を取得し OpenAI で要約して Notion に保存するスクリプト。ローカル実行と GitHub Actions の両対応 |
 | `my-life` | 個人履歴系ドキュメントを保管するリポ。現状は職務経歴書 (Resume.adoc) を扱う |
 | [`py-common-lib`](https://github.com/becky3/py-common-lib) | 複数プロジェクトで共有する Python ユーティリティ。制約付き HTTP クライアント・シークレットストア等を提供 |
-| [`rag-knowledge`](https://github.com/becky3/rag-knowledge) | ChromaDB + BM25 のハイブリッド検索 RAG サービス。Web / Bluesky / YouTube / Zenn / Journal の各インジェスタを持ち MCP サーバーとして公開 |
+| [`rag-knowledge`](https://github.com/becky3/rag-knowledge) | ChromaDB + BM25 のハイブリッド検索 RAG サービス。複数のデータソース取り込み機能を持ち MCP サーバーとして公開 |
 | [`shared-workflows`](https://github.com/becky3/shared-workflows) | GitHub Actions の Reusable Workflows 集約リポ（Claude Code Action / PR 品質チェック / Auto Fix / 事後レビュースキャナー等） |
 
 リンクがないものは private リポジトリ。
