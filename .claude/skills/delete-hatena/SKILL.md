@@ -2,7 +2,7 @@
 name: delete-hatena
 description: はてなブログのエントリとローカル日記記事を AtomPub DELETE で削除する。範囲指定対応。
 user-invocable: true
-allowed-tools: Bash, Read
+allowed-tools: Bash, Read, Glob
 argument-hint: "<YYYY-MM-DD>[..<YYYY-MM-DD>] [--remote-only|--local-only]"
 ---
 

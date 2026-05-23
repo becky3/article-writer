@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import datetime as dt
 import json
 import os
@@ -53,14 +54,24 @@ _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _RANGE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$")
 
 
-def parse_date_arg(arg: str) -> list[str]:
+def parse_date_arg(arg: str) -> tuple[list[str], bool]:
     """日付引数（単一 or 範囲）を連続日付のリストに展開する.
 
-    単一: `YYYY-MM-DD` → [date]
-    範囲: `YYYY-MM-DD..YYYY-MM-DD` → 連続日付のリスト（開始 <= 終了が前提）
+    単一: `YYYY-MM-DD` → ([date], False)
+    範囲: `YYYY-MM-DD..YYYY-MM-DD` → (連続日付のリスト, True)
+
+    `is_range` は元の引数が範囲記法かどうかを表す。日数が 1 件でも、`..` 記法
+    （例: `2026-05-13..2026-05-13`）なら True を返す。md 不在時のスキップ可否を
+    判定するために要素数ではなく記法で判定する。
+
+    単一・範囲どちらも `date.fromisoformat` で値域検証する。
     """
     if _DATE_RE.match(arg):
-        return [arg]
+        try:
+            dt.date.fromisoformat(arg)
+        except ValueError as e:
+            raise SystemExit(f"日付の値が不正です: {e}") from e
+        return [arg], False
     m = _RANGE_RE.match(arg)
     if not m:
         raise SystemExit(
@@ -82,7 +93,7 @@ def parse_date_arg(arg: str) -> list[str]:
     while cur <= end:
         dates.append(cur.isoformat())
         cur += dt.timedelta(days=1)
-    return dates
+    return dates, True
 
 
 def article_path_for(date: str) -> pathlib.Path:
@@ -98,7 +109,11 @@ def delete_remote_entry(
     """AtomPub DELETE を実行する.
 
     Raises:
-        RuntimeError: 404 / 5xx / ネットワーク失敗のいずれか（即停止のため呼び出し側で捕捉）
+        RuntimeError: 以下のいずれかが発生した場合（即停止のため呼び出し側で捕捉）
+            - HTTP 404（はてな側にエントリ不在）
+            - 上記以外の HTTPError（401/403/409/5xx 等）
+            - ネットワーク失敗（urllib.error.URLError / TimeoutError）
+            - 2xx 応答だが status が 200/204 以外
     """
     try:
         status, _body = _atompub_request(
@@ -249,6 +264,28 @@ def validate_targets_for_mode(
         )
 
 
+@dataclasses.dataclass
+class ProcessResult:
+    """1 対象の削除処理結果と段階別完了状態.
+
+    remote_attempted: はてな側 DELETE を試行したか（`--local-only` か edit_url 未登録なら False）
+    remote_done: はてな側 DELETE が成功したか
+    local_attempted: ローカル md 削除を試行したか（`--remote-only` なら False）
+    local_done: ローカル md 削除が成功したか
+    error: 失敗時のエラー内容（成功時 None）
+
+    jsonl 更新は process_targets の最後に一括で行うため、本クラスでは追跡しない。
+    失敗対象の jsonl は反映されないが、それまで成功した対象の jsonl は反映される。
+    """
+
+    date: str
+    remote_attempted: bool = False
+    remote_done: bool = False
+    local_attempted: bool = False
+    local_done: bool = False
+    error: str | None = None
+
+
 def process_targets(
     targets: list[Target],
     *,
@@ -256,28 +293,32 @@ def process_targets(
     local_only: bool,
     hatena_id: str,
     api_key: str,
-) -> tuple[list[str], list[str], str | None]:
+) -> tuple[list[ProcessResult], list[str], str | None]:
     """対象を順次削除する.
 
     Returns:
-        (completed_dates, pending_dates, error_message)
-        - completed_dates: 削除成功した日付
-        - pending_dates: 失敗または未実行の日付（失敗で停止した場合、エラー時の対象と残り全て）
+        (results, pending_dates, error_message)
+        - results: 実行した（試行中に失敗した含む）対象の処理結果リスト。各 ProcessResult が段階別完了状態を保持
+        - pending_dates: 失敗で停止した場合の未実行の日付（results に含まれない残り）
         - error_message: 失敗時のエラー内容（成功時 None）
     """
-    completed: list[str] = []
+    results: list[ProcessResult] = []
     remove_dates: set[str] = set()
     nullify_dates: set[str] = set()
     for i, t in enumerate(targets):
+        result = ProcessResult(date=t.date)
+        results.append(result)
         try:
             print(f"🗑️ {t.date} 削除中...", file=sys.stderr)
             if not local_only:
                 if t.edit_url is not None:
+                    result.remote_attempted = True
                     delete_remote_entry(
                         edit_url=t.edit_url,
                         hatena_id=hatena_id,
                         api_key=api_key,
                     )
+                    result.remote_done = True
                     print("  はてな側 DELETE 成功", file=sys.stderr)
                 else:
                     print(
@@ -285,7 +326,9 @@ def process_targets(
                         file=sys.stderr,
                     )
             if not remote_only:
+                result.local_attempted = True
                 t.article_path.unlink()
+                result.local_done = True
                 print(
                     f"  ローカル md 削除: {t.article_path.relative_to(REPO_ROOT)}",
                     file=sys.stderr,
@@ -296,16 +339,15 @@ def process_targets(
             else:
                 if t.entry is not None:
                     remove_dates.add(t.date)
-            completed.append(t.date)
         except (RuntimeError, OSError) as e:
-            error_msg = str(e)
+            result.error = str(e)
             rewrite_published_jsonl(
                 remove_dates=remove_dates, nullify_dates=nullify_dates
             )
-            pending = [u.date for u in targets[i:]]
-            return completed, pending, error_msg
+            pending = [u.date for u in targets[i + 1:]]
+            return results, pending, str(e)
     rewrite_published_jsonl(remove_dates=remove_dates, nullify_dates=nullify_dates)
-    return completed, [], None
+    return results, [], None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -335,8 +377,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    dates = parse_date_arg(args.date)
-    is_range = len(dates) > 1
+    dates, is_range = parse_date_arg(args.date)
     targets, skipped = build_targets(dates, is_range=is_range)
 
     if skipped:
@@ -372,7 +413,7 @@ def main(argv: list[str] | None = None) -> int:
         hatena_id = require_env(env, "HATENA_ID")
         api_key = get_secret(KEY_API_KEY)
 
-    completed, pending, error_msg = process_targets(
+    results, pending, error_msg = process_targets(
         targets,
         remote_only=args.remote_only,
         local_only=args.local_only,
@@ -380,12 +421,30 @@ def main(argv: list[str] | None = None) -> int:
         api_key=api_key,
     )
 
+    completed_results = [r for r in results if r.error is None]
+    failed_result = next((r for r in results if r.error is not None), None)
+
     print("", file=sys.stderr)
-    print(f"完了: {len(completed)} 件", file=sys.stderr)
-    if completed:
-        print(f"  {', '.join(completed)}", file=sys.stderr)
-    if error_msg is not None:
-        print(f"❌ 失敗で停止: {error_msg}", file=sys.stderr)
+    print(f"完了: {len(completed_results)} 件", file=sys.stderr)
+    if completed_results:
+        print(f"  {', '.join(r.date for r in completed_results)}", file=sys.stderr)
+    if failed_result is not None:
+        print(f"❌ 失敗で停止: {failed_result.date}", file=sys.stderr)
+        print(
+            f"  はてな側 DELETE: "
+            f"{'✓ 完了済み' if failed_result.remote_done else '✗ 未完了' if failed_result.remote_attempted else '- 試行せず'}",
+            file=sys.stderr,
+        )
+        print(
+            f"  ローカル md 削除: "
+            f"{'✓ 完了済み' if failed_result.local_done else '✗ 未完了' if failed_result.local_attempted else '- 試行せず'}",
+            file=sys.stderr,
+        )
+        print(
+            "  jsonl 更新: 失敗対象は未反映（完了済み対象のみ反映済み）",
+            file=sys.stderr,
+        )
+        print(f"  エラー: {error_msg}", file=sys.stderr)
         if pending:
             print(f"未実行 ({len(pending)} 件): {', '.join(pending)}", file=sys.stderr)
         return 1
