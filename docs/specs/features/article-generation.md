@@ -57,7 +57,7 @@ Zenn 形式の技術記事ドラフトを生成するスキル。
 - **トリガー**: Claude Code セッション内で `/write-hatena-diary [日付指定]` をスラッシュコマンドとして実行
 - **入力**: 引数なし（実行日）または `<YYYY-MM-DD>` / `<MM-DD>` / `<日付>..<日付>`（範囲指定）。範囲指定はジャーナル存在日ごとに 1 記事ずつ生成する
 - **素材**: 指定日のジャーナル（必須・RAG 経由）と Bluesky 投稿（任意）
-- **出力**: `articles/hatena/{YYYY-MM-DD}-{HH-MM-SS}-{article-slug}.md`
+- **出力**: `articles/hatena/{YYYY-MM-DD}-diary.md`
 - **生成直後の自動レビュー**: 各記事を Write した直後に `/review-hatena-diary` を自動呼び出しし、4 観点並列レビュー → triage 連携 → 修正適用 までを当該記事のループ内で完結させる
 - **投稿（別スキル）**: はてなブログへの下書き登録は `/publish-hatena` スキルで行う
 - **動作仕様の詳細**（Phase 構成・素材取得・記法ポリシー・記事構成）: `.claude/skills/write-hatena-diary/SKILL.md` および同階層の関連ファイル（`quality-guidelines.md` / `narrative-guidelines.md` / `template-diary.md` / `balloon-html.md`）に保持する

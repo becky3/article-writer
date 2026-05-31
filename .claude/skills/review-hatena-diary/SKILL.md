@@ -29,8 +29,8 @@ argument-hint: "<対象ファイルパス> [--auto-publish]"
 
 例:
 
-- 通常: `/review-hatena-diary articles/hatena/2026-05-16-11-46-00-diary-style-revamp.md`
-- 無人: `/review-hatena-diary articles/hatena/2026-05-16-11-46-00-diary-style-revamp.md --auto-publish`
+- 通常: `/review-hatena-diary articles/hatena/2026-05-16-diary.md`
+- 無人: `/review-hatena-diary articles/hatena/2026-05-16-diary.md --auto-publish`
 
 引数が空、または対象ファイルが存在しない場合はエラー表示して停止する。
 
@@ -164,7 +164,7 @@ argument-hint: "<対象ファイルパス> [--auto-publish]"
 - ディレクトリ: `.tmp/review-hatena-diary/`（存在しなければ `Bash` ツールで `mkdir -p` で作成）
 - ファイル名: `<日時>-<slug>.md`
   - `<日時>`: `YYYYMMDD-HHMMSS` 形式（`Bash` ツールで `date '+%Y%m%d-%H%M%S'` で取得）
-  - `<slug>`: 対象ファイル名から拡張子を除いた値（例: `articles/hatena/2026-05-16-11-46-00-foo.md` → `2026-05-16-11-46-00-foo`）
+  - `<slug>`: 対象ファイル名から拡張子を除いた値（例: `articles/hatena/2026-05-16-diary.md` → `2026-05-16-diary`）
 
 集約ファイルのフォーマット:
 
