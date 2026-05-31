@@ -11,10 +11,10 @@ argument-hint: "[YYYY-MM-DD | MM-DD | <日付>..<日付>] [--auto-publish]"
 指定日のジャーナル（必須）と Bluesky 投稿（補足）を素材に、はてなブログ向けの日記 Markdown を生成する。
 **1 日 = 1 記事** が単位。範囲指定の場合は範囲内でジャーナルが存在する各日について独立した記事を 1 つずつ生成する（1 記事に複数日をまとめない）。
 執筆ガイドは品質ルール（媒体共通）と物語世界（書き手ペルソナ）の 2 ファイルに分離している。
-`.claude/skills/write-hatena-diary/quality-guidelines.md` が品質ルール SSoT（タイトル・構成・記法・禁止情報等）、
-`.claude/skills/write-hatena-diary/narrative-guidelines.md` が物語世界 SSoT（キャラクター・関係性・社長・読者像・素材の扱い等）。
+`.claude/skills/write-hatena-diary/quality-guidelines.md` が必ず守る絶対原則の SSoT（構造・記法・禁止情報・事実正確性等）、
+`.claude/skills/write-hatena-diary/narrative-guidelines.md` が物語世界と書き方の SSoT（キャラクター・関係性・社長・読者像・素材の扱い・タイトルの付け方・文体・解説・地の文等）。
 `/review-hatena-diary` の各観点もこの 2 ファイルを機械照合する。
-記事テンプレート（リポジトリマスターテーブル含む）は `.claude/skills/write-hatena-diary/template-diary.md` を SSoT とする。
+記事テンプレートは `.claude/skills/write-hatena-diary/template-diary.md` を SSoT とする。
 吹き出し・Bluesky 埋め込みの簡素記法は `.claude/skills/write-hatena-diary/balloon-html.md` を参照。
 変換は `/publish-hatena` 投稿時に `scripts/convert_article_html.py` が行う。
 本スキルは簡素記法を `articles/hatena/*.md` に書き出すまでを担い、HTML 展開は行わない。
@@ -161,14 +161,14 @@ argument-hint: "[YYYY-MM-DD | MM-DD | <日付>..<日付>] [--auto-publish]"
 ### Phase 3: Bluesky 選別（当該日 `d`）
 
 1. `BLUESKY_BY_DATE[d]` が 0 件なら本 Phase をスキップして Phase 4 へ
-2. 各投稿について、AI / LLM / 開発関連の話題か Claude の文脈理解で判定する
-3. 関連と判定した投稿のみ当該日の「引用候補」セットに残す
-4. 関連投稿が 0 件の場合: Phase 4 では当該日の Bluesky 引用シーンを設けない
+2. 投稿は話題を問わず引用候補になる。技術・私的（日常・趣味等）の別で除外しない
+3. 記事の素材・対比・オチに使える投稿を当該日の「引用候補」セットに残す。使わない投稿があってもよい
+4. 引用候補を 1 件も採らない場合: Phase 4 では当該日の Bluesky 言及・引用とも設けない（言及だけ・引用なしは不可）
 
 ### Phase 4: 記事生成（当該日 `d`）
 
 1. **本文の構成・口調・展開は `narrative-guidelines.md`（物語世界）を制御点として書き手の裁量に任せる**。固定セクション・必須サブセクションは設けない
-2. **タイトル** の文字列は `quality-guidelines.md`「タイトル」の方針に従って決め、フロントマター `title:` と本文 H1 を一致させる
+2. **タイトル** の文字列は `narrative-guidelines.md`「タイトルの付け方」の方針に従って決め、フロントマター `title:` と本文 H1 を一致させる（一致ルールは `quality-guidelines.md`「タイトル一致」）
 3. **リポを言及する箇所では `name` を backtick 付きで本文に直接書く**（例: `` `rag-knowledge` ``、`` `article-writer` ``）。`becky3/<name>` 形式・`#<番号>` 形式（Issue / PR）は使わない
 4. **吹き出し** は `kuro-chan>>...` / `nee-san>>...` の単行マーカー記法で書く。記法仕様は `balloon-html.md` を参照。HTML タグ（`<div class="balloon">` 等）を直接書かない
 5. **Bluesky 引用部** は `{{{bluesky ... }}}` のフェンス記法で書く
@@ -178,7 +178,7 @@ argument-hint: "[YYYY-MM-DD | MM-DD | <日付>..<日付>] [--auto-publish]"
 6. **簡素記法ブロックの自己チェック**: シーンを書き終えるたびに `balloon-html.md` 「書き手向けチェックリスト」を確認する（balloon の 1 行 1 セリフ / bluesky フェンスの閉じ `}}}` / 入れ子禁止 等）。記事全体を書き終えてからまとめてチェックすると修正箇所が散らばるため、シーン単位で確認する
 7. **セクション配置の順序**: タイトル H1 の直下に **登場人物セクション** を置き、続いて本文の H2 シーン、記事末尾に **プロジェクトの説明セクション** を置く。順序の SSoT は `template-diary.md` 冒頭の構造リストを参照
 8. **登場人物セクション** をタイトル H1 直下に挿入する（言及リポ・対話シーン数に関わらず常に挿入）。固定 HTML 文言と置換ルールの SSoT は `template-diary.md` 「登場人物セクション」（マーカー全置換義務・字数・改変禁止範囲を含む）。置換内容の方針は `narrative-guidelines.md`「登場人物セクションの一言」を参照
-9. **プロジェクトの説明セクション** を記事末尾に挿入する（言及リポの有無に関わらず常に挿入）。セクション構造とテーブル絞り込みルールは `template-diary.md` 「リポジトリマスターテーブル」「プロジェクトの説明セクション」を参照
+9. **プロジェクトの説明セクション** を記事末尾に挿入する（常に挿入）。構造は `template-diary.md` 「プロジェクトの説明セクション」を参照
 
 ### Phase 5: ファイル出力（当該日 `d`）
 
@@ -198,7 +198,7 @@ Phase 5 で当該日の記事を Write した直後、本ステップで `/revie
    - `<パス>` には Phase 5 で Write した記事のリポジトリルートからの相対パス（例: `articles/hatena/2026-05-13-diary.md`）を指定する
    - `/review-hatena-diary` は絶対パス指定をエラー停止するため必ず相対パスで渡す
    - `AUTO_PUBLISH=1` の場合は引数末尾に `--auto-publish` を付与し、`/review-hatena-diary <パス> --auto-publish` の形で起動する
-2. `/review-hatena-diary` 内で 3 観点並列レビュー → 指摘の triage 連携 / 書き手自己判断 → 確定した修正を対象記事ファイルへ適用する処理が完結する（本スキル側で追加の triage や修正適用は行わない）
+2. `/review-hatena-diary` 内で 4 観点並列レビュー → 指摘の triage 連携 / 書き手自己判断 → 確定した修正を対象記事ファイルへ適用する処理が完結する（本スキル側で追加の triage や修正適用は行わない）
 3. `/review-hatena-diary` が正常完了したら次の日のループ（Phase 3）へ進む
 
 エラー時の挙動:
@@ -292,6 +292,6 @@ Phase 5 で当該日の記事を Write した直後、本ステップで `/revie
 
 ## 注意事項
 
-- 生成された記事は Phase 5.5 で `/review-hatena-diary` による自動レビュー（3 観点並列 + triage + 修正適用）を経た上で出力される
+- 生成された記事は Phase 5.5 で `/review-hatena-diary` による自動レビュー（4 観点並列 + triage + 修正適用）を経た上で出力される
 - ペルソナ調整提案は記事生成中に行ってよいが、適用前にオーナー確認を取る（`narrative-guidelines.md`「ペルソナ調整に関する自己制御」参照）
 - 著作物・IP 情報の混入を避ける（`quality-guidelines.md`「著作物・IP 情報の取り扱い」参照。`/review-hatena-diary` 観点 2「ガイドライン準拠」でも検出する）
