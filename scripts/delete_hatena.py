@@ -34,6 +34,7 @@ import pathlib
 import re
 import sys
 import tempfile
+import time
 import urllib.error
 
 from publish_hatena import (
@@ -293,8 +294,15 @@ def process_targets(
     local_only: bool,
     hatena_id: str,
     api_key: str,
+    interval: float = 0.0,
 ) -> tuple[list[ProcessResult], list[str], str | None]:
     """対象を順次削除する.
+
+    interval > 0 のとき、2 回目以降のはてな DELETE の直前に time.sleep(interval) を挟み、
+    連続 DELETE のバースト送信を避ける。ローカルのみの処理・edit_url 未登録の対象は待機しない。
+    interval の関数デフォルトは 0.0（待機なし）で、interval 非対応だった既存呼び出し・テストの
+    後方互換を保つ。CLI のデフォルト（main の --interval default=1.0）はバースト送信を避ける
+    安全側の値であり、main から明示的に渡される。
 
     Returns:
         (results, pending_dates, error_message)
@@ -305,6 +313,7 @@ def process_targets(
     results: list[ProcessResult] = []
     remove_dates: set[str] = set()
     nullify_dates: set[str] = set()
+    remote_delete_count = 0
     for i, t in enumerate(targets):
         result = ProcessResult(date=t.date)
         results.append(result)
@@ -312,6 +321,8 @@ def process_targets(
             print(f"🗑️ {t.date} 削除中...", file=sys.stderr)
             if not local_only:
                 if t.edit_url is not None:
+                    if remote_delete_count > 0 and interval > 0:
+                        time.sleep(interval)
                     result.remote_attempted = True
                     delete_remote_entry(
                         edit_url=t.edit_url,
@@ -319,6 +330,7 @@ def process_targets(
                         api_key=api_key,
                     )
                     result.remote_done = True
+                    remote_delete_count += 1
                     print("  はてな側 DELETE 成功", file=sys.stderr)
                 else:
                     print(
@@ -388,11 +400,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="ローカル md 削除と jsonl 行削除のみ実行し、はてな側は呼ばない",
     )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=1.0,
+        help="はてな DELETE を連続実行する際の各リクエスト間の待機秒数（デフォルト: 1.0）",
+    )
     args = parser.parse_args(argv)
 
     if args.remote_only and args.local_only:
         print(
             "❌ --remote-only と --local-only は同時に指定できません",
+            file=sys.stderr,
+        )
+        return 1
+
+    if args.interval < 0:
+        print(
+            "❌ --interval には 0 以上の秒数を指定してください",
             file=sys.stderr,
         )
         return 1
@@ -439,6 +464,7 @@ def main(argv: list[str] | None = None) -> int:
         local_only=args.local_only,
         hatena_id=hatena_id,
         api_key=api_key,
+        interval=args.interval,
     )
 
     completed_results = [r for r in results if r.error is None]
