@@ -557,6 +557,11 @@ def main(argv: list[str] | None = None) -> int:
         )
     category = frontmatter.get("category")
     pattern = frontmatter.get("pattern")
+    if not pattern:
+        raise SystemExit(
+            f"フロントマターに進行パターン (pattern) がありません: {article_path}\n"
+            f"  記事生成スキルは pattern を必ず記録します。未設定は運用上の不整合のため確認してください。"
+        )
     body = strip_leading_h1(body, title)
     try:
         body = convert_article_html.convert(body)
