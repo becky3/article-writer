@@ -442,25 +442,34 @@ def extract_link_href(response_body: str, *, rel: str) -> str | None:
     return None
 
 
-def append_published(diary_date: str, title: str, edit_url: str | None) -> None:
+def append_published(
+    diary_date: str, title: str, edit_url: str | None, pattern: str | None
+) -> None:
     """published.jsonl に 1 行 JSON を追記する.
 
     日付欄は記事フロントマターの `date:` をそのまま使う（日記対象日）。
     edit_url が None なら `"edit_url": null` で出力する。
+    pattern は記事フロントマターの `pattern:`（進行パターン ID）。値があれば記録する。
     日本語を `\\uXXXX` エスケープせず人間可読のまま保存するため ensure_ascii=False を指定する。
     """
-    record = {"date": diary_date, "title": title, "edit_url": edit_url}
+    record: dict[str, str | None] = {
+        "date": diary_date,
+        "title": title,
+        "edit_url": edit_url,
+    }
+    if pattern is not None:
+        record["pattern"] = pattern
     line = json.dumps(record, ensure_ascii=False) + "\n"
     PUBLISHED_JSONL.parent.mkdir(parents=True, exist_ok=True)
     with PUBLISHED_JSONL.open("a", encoding="utf-8") as f:
         f.write(line)
 
 
-def update_published_title(diary_date: str, title: str) -> bool:
-    """published.jsonl 内の指定日付エントリの title を最新タイトルに更新する.
+def update_published_title(diary_date: str, title: str, pattern: str | None) -> bool:
+    """published.jsonl 内の指定日付エントリの title（と pattern）を最新値に更新する.
 
-    PUT (--force) 時に最新タイトルへ追従させるため使用する。
-    edit_url は既存値を保持する。
+    PUT (--force) 時に最新タイトル・進行パターンへ追従させるため使用する。
+    edit_url は既存値を保持する。pattern は値があれば更新、None なら既存値を保持する。
 
     壊れた JSON 行・空行は変更せずそのまま保持する（他行への影響を避ける）。
 
@@ -491,6 +500,8 @@ def update_published_title(diary_date: str, title: str) -> bool:
             continue
         if obj.get("date") == diary_date:
             obj["title"] = title
+            if pattern is not None:
+                obj["pattern"] = pattern
             line = json.dumps(obj, ensure_ascii=False)
             updated = True
         out_lines.append(line)
@@ -545,6 +556,7 @@ def main(argv: list[str] | None = None) -> int:
             f"  対象記事: {article_path}"
         )
     category = frontmatter.get("category")
+    pattern = frontmatter.get("pattern")
     body = strip_leading_h1(body, title)
     try:
         body = convert_article_html.convert(body)
@@ -661,7 +673,7 @@ def main(argv: list[str] | None = None) -> int:
 
     append_failed = False
     if args.force:
-        if update_published_title(diary_date, title):
+        if update_published_title(diary_date, title, pattern):
             print("  published.jsonl の title を最新タイトルに更新（edit_url は保持）")
         else:
             print(
@@ -671,7 +683,7 @@ def main(argv: list[str] | None = None) -> int:
             append_failed = True
     else:
         try:
-            append_published(diary_date, title, edit_url)
+            append_published(diary_date, title, edit_url, pattern)
             if edit_url:
                 print("  published.jsonl に追記済み（edit_url 含む）")
             else:
