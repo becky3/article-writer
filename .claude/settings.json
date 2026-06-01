@@ -1,0 +1,5 @@
+{
+  "env": {
+    "WORKTREE_DISABLED": "1"
+  }
+}

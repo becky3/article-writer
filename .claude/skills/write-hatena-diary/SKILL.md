@@ -31,15 +31,15 @@ argument-hint: "[YYYY-MM-DD | MM-DD | <日付>..<日付>] [--auto-publish]"
 - **`<日付>..<日付>`**: 範囲指定。範囲内のジャーナル存在日ごとに 1 記事ずつ生成（複数記事）。両端は独立に補完（`MM-DD` 形式は実行日の年で補完）
   - 例: `5-13` → 当年 5/13 の 1 記事、`2025-12-31..1-03` → 2025-12-31..2026-01-03 のジャーナル存在日ごとに記事
 - **`--auto-publish`**: 任意。`/auto-publish-diary` 経由で起動される無人実行モード。日付選定軸（`auto-next` / `single` / `range`）とは直交した独立軸として動作する:
-  - Phase 5.5: `/review-hatena-diary <パス> --auto-publish` を渡し、レビュー結果を triage ではなく書き手自己判断で適用させる
-  - Phase 6: エディタオープンを省略し、構造化された完了メッセージを出力する
+  - Phase 4-6: `/review-hatena-diary <パス> --auto-publish` を渡し、レビュー結果を triage ではなく書き手自己判断で適用させる
+  - Phase 5: エディタオープンを省略し、構造化された完了メッセージを出力する
   - 範囲指定（`<日付>..<日付>`）との併用はエラー停止する（auto-publish は呼び出し元 `/auto-publish-diary` からの単一日前提）
 
-## 処理手順 (Phase 1〜6)
+## 処理手順 (Phase 1〜5)
 
-範囲指定では Phase 3〜5.5 を **日付ごとに独立して繰り返す**。Phase 1（引数パース）で対象日リストを確定し、Phase 2（素材収集）で範囲一括取得 → 日付ごとに分類した後、ジャーナルが存在する各日について Phase 3〜5.5 をループ実行する。
+Phase 1（引数パース）で対象日リストを確定し、Phase 2 でジャーナルが存在する日を特定、Phase 3 で共通リソースを読み込んだ後、ジャーナル存在日ごとに Phase 4 を **1 日 = 1 タスクとして繰り返す**。各日のループ（Phase 4-1〜4-6）は素材取得 → 事実確認 → 記事生成 → レビューまでを独立して完結させる。ループ終了後に Phase 5（後処理）を 1 回実行する。
 
-記事生成（Phase 5）直後に自動レビュー（Phase 5.5）が走り、レビュー結果は `/review-hatena-diary` 内で triage 連携・修正適用まで完結する。
+記事生成（Phase 4-4）直後に同じループ内で自動レビュー（Phase 4-6）が走り、レビュー結果は `/review-hatena-diary` 内で triage 連携・修正適用まで完結する。
 
 ### Phase 1: 引数パース
 
@@ -96,11 +96,13 @@ argument-hint: "[YYYY-MM-DD | MM-DD | <日付>..<日付>] [--auto-publish]"
 | `DATE_FROM > DATE_TO` | `エラー: 範囲の開始日が終了日より後です: <DATE_FROM>..<DATE_TO>` |
 | 日付として無効（例: 2026-02-30） | `エラー: 無効な日付です: <入力>` |
 
-### Phase 2: 素材収集（範囲一括取得 + 日付ごと分類）
+### Phase 2: 対象日の確定（ジャーナル存在日の特定）
+
+素材の全文取得・Bluesky 取得はここでは行わない。対象日のうちジャーナルが存在する日を特定する一覧照会のみを行う。素材取得は各日のループ（Phase 4-1）で実施する。
 
 1. `rag_list_by_date_range(date_from=DATE_FROM, date_to=DATE_TO, source_type="journal", limit=100)` でジャーナル一覧を取得（`limit` は十分大きい値を明示。デフォルト 20 ではジャーナル多い日に取り切れない）
-2. 結果を **対象日ごとに分類** し、`JOURNAL_BY_DATE = {date: [journals], ...}` を構築。`rag_list_by_date_range` の応答上限に達した場合は警告を表示してユーザーに範囲縮小を促す
-3. **範囲内の全日でジャーナル 0 件の場合は即エラー停止**（Bluesky 取得もスキップ）。`MODE=auto-next` か否かでメッセージを出し分ける:
+2. 結果を対象日ごとに分類し、ジャーナルが存在する日を `JOURNAL_DATES` として保持する。`rag_list_by_date_range` の応答上限に達した場合は警告を表示してユーザーに範囲縮小を促す
+3. **範囲内の全日でジャーナル 0 件の場合は即エラー停止**。`MODE=auto-next` か否かでメッセージを出し分ける:
 
    `MODE=auto-next` 以外:
 
@@ -116,7 +118,7 @@ argument-hint: "[YYYY-MM-DD | MM-DD | <日付>..<日付>] [--auto-publish]"
    日記の素材になるジャーナルがないため執筆を停止します。
    ```
 
-4. ジャーナルが存在する日を `JOURNAL_DATES` として保持し、後続 Phase の対象とする。**`MODE=auto-next` の場合は `JOURNAL_DATES` を日付昇順にソートして最も古い 1 日（= `DATE_FROM` に最も近い 1 日）のみを残し、他は破棄する**（1 回の実行で生成する記事は 1 本に固定）。絞り込んだ日を以下の情報メッセージで通知:
+4. **`MODE=auto-next` の場合は `JOURNAL_DATES` を日付昇順にソートして最も古い 1 日（= `DATE_FROM` に最も近い 1 日）のみを残し、他は破棄する**（1 回の実行で生成する記事は 1 本に固定）。絞り込んだ日を以下の情報メッセージで通知:
 
    ```text
    情報: auto-next: <date> を執筆対象として選択しました（過去執筆記事最新日の翌日以降で最初のジャーナル存在日）
@@ -128,14 +130,25 @@ argument-hint: "[YYYY-MM-DD | MM-DD | <日付>..<日付>] [--auto-publish]"
    警告: <date> はジャーナルが見つからなかったためスキップしました
    ```
 
-6. `JOURNAL_BY_DATE` の全ジャーナルを `rag_get_document(source_id=...)` で全文取得
-7. `rag_list_by_date_range(date_from=DATE_FROM, date_to=DATE_TO, source_type="bluesky", limit=100)` で Bluesky 投稿一覧を取得（**本ステップは必須実行**、全日 0 件でも続行）
-8. 結果を **対象日ごとに分類** し、`BLUESKY_BY_DATE = {date: [posts], ...}` を構築
-9. 各投稿について `rag_get_document(source_id=..., format="original")` で投稿 JSON 全体を取得する。
+### Phase 3: ループ前準備（共通リソース読み込み）
+
+`quality-guidelines.md` / `narrative-guidelines.md` / `template-diary.md` を Read する（**Phase 4 のループ全体で 1 回のみ実行**。各日のループ内で再読込しない）。読み込んだ内容は Phase 4-4（執筆ガイド + テンプレート参照）で共通利用する。
+
+---
+
+**以後の Phase 4 は `JOURNAL_DATES` を順に走査し、各日 `d` について Phase 4-1〜4-6 を独立に実行する。各日が 1 タスクとして閉じる（素材取得 → 事実確認 → 記事生成 → ファイル出力 → レビュー）。**
+
+### Phase 4: 日付ごとの記事生成タスク（各日 `d`）
+
+#### Phase 4-1: 素材取得（当該日 `d`）
+
+1. 当該日のジャーナルを `rag_get_document(source_id=...)` で全文取得する
+2. `rag_list_by_date_range(date_from=d, date_to=d, source_type="bluesky", limit=100)` で当該日の Bluesky 投稿一覧を取得する（**本ステップは必須実行**、0 件でも続行）
+3. 各投稿について `rag_get_document(source_id=..., format="original")` で投稿 JSON 全体を取得する。
 
     **`format="original"` 指定必須**（デフォルトの `format="text"` では本文以外のメタデータが失われ、`cid` 等が取得できない）。
 
-    取得した JSON から以下のフィールドを抽出して Phase 4 で `{{{bluesky ... }}}` 簡素記法ブロックの key=value 値として埋め込む:
+    取得した JSON から以下のフィールドを抽出して Phase 4-4 で `{{{bluesky ... }}}` 簡素記法ブロックの key=value 値として埋め込む:
 
     | キー | JSON パス |
     |---|---|
@@ -150,22 +163,32 @@ argument-hint: "[YYYY-MM-DD | MM-DD | <日付>..<日付>] [--auto-publish]"
 
     Bluesky 投稿の時刻情報は本記事全体で JST として扱うこと（時刻への直接言及・前後関係・暗示的な時系列描写を含む全ての記述において）。
 
-### Phase 2.5: ループ前準備（共通リソース読み込み）
+#### Phase 4-2: 関連リポジトリ・Issue/PR の事実確認（当該日 `d`）
 
-`quality-guidelines.md` / `narrative-guidelines.md` / `template-diary.md` を Read する（**Phase 3〜5.5 のループ全体で 1 回のみ実行**。各日のループ内で再読込しない）。読み込んだ内容は Phase 4（執筆ガイド + テンプレート参照）で共通利用する。
+記事化前に、当該日のジャーナルが扱う対象の事実を確認する。リポジトリと機能の取り違え・役割の誤認を防ぐ。
 
----
+1. **対象リポジトリの特定**: ジャーナルの `source_id`（`journal/<repo>/...`）からリポジトリ名を取得し、`.claude/sources.yml` の `owner/name` を引き当てる
+2. **リポジトリ実態の把握**: 環境変数 `LOCAL_REPOS_ROOT` からローカルパス（`${LOCAL_REPOS_ROOT}/<owner>/<name>`）を解決し、`README.md` および `docs/specs/overview.md` 等を読む。リポジトリ全体の役割と、ジャーナルが扱う対象が「リポジトリ全体」か「その一機能」かの境界を確認する。ローカル不在・`LOCAL_REPOS_ROOT` 未設定時は `gh`（`gh repo view <owner/name>`・`gh api` での README 取得）にフォールバックする
+3. **関連 Issue/PR の確認**: ジャーナル本文に記載された Issue/PR 番号のうち、記事で扱う見込みのエピソードに対応するものを `gh issue view <番号> --repo <owner/name>` / `gh pr view <番号> --repo <owner/name>` で確認し、背景・変更点・経緯を把握する。全件確認は不要（採用エピソードの 1〜2 件に絞る）
+4. 確認した事実を Phase 4-4 の記事生成に反映する。リポジトリ名・機能名・役割は確認結果と整合させ、ジャーナルや思い込みだけに基づく断定をしない
 
-**以後の Phase 3〜5.5 は `JOURNAL_DATES` を順に走査し、各日 `d` について独立に実行する。**
+#### Phase 4-3: Bluesky 選別（当該日 `d`）
 
-### Phase 3: Bluesky 選別（当該日 `d`）
-
-1. `BLUESKY_BY_DATE[d]` が 0 件なら本 Phase をスキップして Phase 4 へ
+1. 当該日の Bluesky 投稿が 0 件なら本ステップをスキップして Phase 4-4 へ
 2. 投稿は話題を問わず引用候補になる。技術・私的（日常・趣味等）の別で除外しない
 3. 記事の素材・対比・オチに使える投稿を当該日の「引用候補」セットに残す。使わない投稿があってもよい
-4. 引用候補を 1 件も採らない場合: Phase 4 では当該日の Bluesky 言及・引用とも設けない（言及だけ・引用なしは不可）
+4. 引用候補を 1 件も採らない場合: Phase 4-4 では当該日の Bluesky 言及・引用とも設けない（言及だけ・引用なしは不可）
 
-### Phase 4: 記事生成（当該日 `d`）
+#### Phase 4-4: 記事生成（当該日 `d`）
+
+**まず進行パターンを 1 つ決める**（記事の構成方針。候補は `narrative-guidelines.md`「進行パターン」の A〜J が SSoT）:
+
+1. `articles/hatena/patterns.jsonl` が存在すれば末尾 5 エントリの `pattern` 値を読む（不在なら除外なし）
+2. `narrative-guidelines.md`「進行パターン」の全候補名（A〜J のパターン名）から、手順 1 の直近 5 件を除いた集合を作る
+3. その集合から `python` でランダムに 1 つ選ぶ（候補名を引数で渡す例: `python -c "import random,sys; print(random.choice(sys.argv[1:]))" "クロ作業実況" "姉さん振り" ...`）。候補は narrative-guidelines が SSoT のため、毎回そこから構築して渡す
+4. 選んだパターンを以降の本文構成のトーン・展開方針として反映する。ジャーナルの事実は歪めない。**パターン名は記事本文に書かない**（jsonl への記録は Phase 4-5）
+
+続いて本文を書く。**過去記事・archive を参照しない**（`articles/hatena/**`・`articles/hatena/archive/**` の既存記事本文は読まない。焼き直し・既視感を避けるため、素材（ジャーナル・Bluesky）と設定のみから新規に書く）:
 
 1. **本文の構成・口調・展開は `narrative-guidelines.md`（物語世界）を制御点として書き手の裁量に任せる**。固定セクション・必須サブセクションは設けない
 2. **タイトル** の文字列は `narrative-guidelines.md`「タイトルの付け方」の方針に従って決め、フロントマター `title:` と本文 H1 を一致させる（一致ルールは `quality-guidelines.md`「タイトル一致」）
@@ -173,14 +196,14 @@ argument-hint: "[YYYY-MM-DD | MM-DD | <日付>..<日付>] [--auto-publish]"
 4. **吹き出し** は `kuro-chan>>...` / `nee-san>>...` の単行マーカー記法で書く。記法仕様は `balloon-html.md` を参照。HTML タグ（`<div class="balloon">` 等）を直接書かない
 5. **Bluesky 引用部** は `{{{bluesky ... }}}` のフェンス記法で書く
     - 記法仕様: `balloon-html.md` 「Bluesky 記法」
-    - メタデータ: Phase 2 で取得した key=value 形式（`did` / `cid` / `rkey` / `handle` / `display-name` / `created-at` / `text`、`lang` は任意）
+    - メタデータ: Phase 4-1 で取得した key=value 形式（`did` / `cid` / `rkey` / `handle` / `display-name` / `created-at` / `text`、`lang` は任意）
     - 引用部の前提・関係性: `narrative-guidelines.md`「オーナー（社長）の位置づけ」「社長の SNS（Bluesky）について」を参照
 6. **簡素記法ブロックの自己チェック**: シーンを書き終えるたびに `balloon-html.md` 「書き手向けチェックリスト」を確認する（balloon の 1 行 1 セリフ / bluesky フェンスの閉じ `}}}` / 入れ子禁止 等）。記事全体を書き終えてからまとめてチェックすると修正箇所が散らばるため、シーン単位で確認する
 7. **セクション配置の順序**: タイトル H1 の直下に **登場人物セクション** を置き、続いて本文の H2 シーン、記事末尾に **プロジェクトの説明セクション** を置く。順序の SSoT は `template-diary.md` 冒頭の構造リストを参照
 8. **登場人物セクション** をタイトル H1 直下に挿入する（言及リポ・対話シーン数に関わらず常に挿入）。固定 HTML 文言と置換ルールの SSoT は `template-diary.md` 「登場人物セクション」（マーカー全置換義務・字数・改変禁止範囲を含む）。置換内容の方針は `narrative-guidelines.md`「登場人物セクションの一言」を参照
 9. **プロジェクトの説明セクション** を記事末尾に挿入する（常に挿入）。構造は `template-diary.md` 「プロジェクトの説明セクション」を参照
 
-### Phase 5: ファイル出力（当該日 `d`）
+#### Phase 4-5: ファイル出力（当該日 `d`）
 
 1 日 1 記事を前提とした命名で、`published.jsonl` の重複検知（`date:` キー）と整合する。
 
@@ -189,29 +212,30 @@ argument-hint: "[YYYY-MM-DD | MM-DD | <日付>..<日付>] [--auto-publish]"
 3. **新規作成のため Write を使用**
 4. 同名ファイルが既に存在する場合はエラー停止
 5. 生成済みパスを `GENERATED_PATHS` リストに追加
+6. Phase 4-4 で採用した進行パターンを `articles/hatena/patterns.jsonl` に 1 行 JSON で追記する: `{"date": "<YYYY-MM-DD>", "pattern": "<パターン名>"}`（`pattern` 値はパターン名。例: `役割逆転` / `姉さん暴走` / `自由形式`）
 
-### Phase 5.5: レビュー自動呼び出し（当該日 `d`）
+#### Phase 4-6: レビュー自動呼び出し（当該日 `d`）
 
-Phase 5 で当該日の記事を Write した直後、本ステップで `/review-hatena-diary` を自動呼び出しする。各記事のループ内で実行することで、生成 → review → triage → 修正 をコンテキストが新鮮なうちに完結させる。
+Phase 4-5 で当該日の記事を Write した直後、本ステップで `/review-hatena-diary` を自動呼び出しする。各記事のループ内で実行することで、生成 → review → triage → 修正 をコンテキストが新鮮なうちに完結させる。
 
 1. `Skill` ツールで `/review-hatena-diary <パス>` を起動する。
-   - `<パス>` には Phase 5 で Write した記事のリポジトリルートからの相対パス（例: `articles/hatena/2026-05-13-diary.md`）を指定する
+   - `<パス>` には Phase 4-5 で Write した記事のリポジトリルートからの相対パス（例: `articles/hatena/2026-05-13-diary.md`）を指定する
    - `/review-hatena-diary` は絶対パス指定をエラー停止するため必ず相対パスで渡す
    - `AUTO_PUBLISH=1` の場合は引数末尾に `--auto-publish` を付与し、`/review-hatena-diary <パス> --auto-publish` の形で起動する
 2. `/review-hatena-diary` 内で 4 観点並列レビュー → 指摘の triage 連携 / 書き手自己判断 → 確定した修正を対象記事ファイルへ適用する処理が完結する（本スキル側で追加の triage や修正適用は行わない）
-3. `/review-hatena-diary` が正常完了したら次の日のループ（Phase 3）へ進む
+3. `/review-hatena-diary` が正常完了したら次の日のループ（Phase 4-1）へ進む
 
 エラー時の挙動:
 
 - `/review-hatena-diary` が正常終了しなかった場合（起動自体の失敗・内部停止・全サブエージェント失敗等を含む）は、警告を表示してその日のループを完了扱いとし、次の日のループに進む。生成済み記事は `GENERATED_PATHS` に残る
-- **単一日対象モード**（`MODE=single` / `MODE=auto-next`）で「次の日」が存在しない場合はそのまま Phase 6（後処理）へ進む
+- **単一日対象モード**（`MODE=single` / `MODE=auto-next`）で「次の日」が存在しない場合はそのまま Phase 5（後処理）へ進む
 - `/review-hatena-diary` 内のサブエージェント部分失敗・triage 中断・修正適用失敗は `/review-hatena-diary` 側で処理され、本ステップにはエラーとして伝播しない（部分的な review 結果として完了扱い）
 
 ---
 
-**ループ終了後（全 `JOURNAL_DATES` を処理した後）に Phase 6 を 1 回実行する。**
+**ループ終了後（全 `JOURNAL_DATES` を処理した後）に Phase 5 を 1 回実行する。**
 
-### Phase 6: 後処理（ループ後にまとめて 1 回）
+### Phase 5: 後処理（ループ後にまとめて 1 回）
 
 `articles/hatena/**` は markdownlint の対象外のため、本 Phase では lint を実行しない。挙動は `AUTO_PUBLISH` の値で分岐する。
 
@@ -266,8 +290,8 @@ Phase 5 で当該日の記事を Write した直後、本ステップで `/revie
 | 範囲内の全日でジャーナル 0 件 | エラー表示 + 停止（日記成立条件不足。auto-next モードは専用メッセージ） |
 | 範囲内の一部の日でジャーナル 0 件 | 警告表示 + その日をスキップして続行 |
 | 特定日で Bluesky 検索結果 0 件 | Phase 3 をスキップ + 当該記事の Bluesky セクションを省略して続行 |
-| Phase 3〜5.5 ループ中に MCP タイムアウト・致命エラーで全体中断 | それまでに Write 済みのパスを `GENERATED_PATHS` に残し、Phase 6（エディタオープン・完了メッセージ）を残存分に対して実行する。完了メッセージで中断した旨を併記 |
-| Phase 5.5 で `/review-hatena-diary` が正常終了しなかった | 警告表示 + その日のループを完了扱いとし、次の日のループに進む（起動失敗・内部停止・全サブエージェント失敗を含む）。単一日対象モード（`MODE=single` / `MODE=auto-next`）で「次の日」が存在しない場合は Phase 6 へ進む |
+| Phase 4 ループ中に MCP タイムアウト・致命エラーで全体中断 | それまでに Write 済みのパスを `GENERATED_PATHS` に残し、Phase 5（エディタオープン・完了メッセージ）を残存分に対して実行する。完了メッセージで中断した旨を併記 |
+| Phase 4-6 で `/review-hatena-diary` が正常終了しなかった | 警告表示 + その日のループを完了扱いとし、次の日のループに進む（起動失敗・内部停止・全サブエージェント失敗を含む）。単一日対象モード（`MODE=single` / `MODE=auto-next`）で「次の日」が存在しない場合は Phase 5 へ進む |
 | `code` PATH 不通 | サイレントスキップ |
 
 ## ソース参照形式
@@ -292,6 +316,6 @@ Phase 5 で当該日の記事を Write した直後、本ステップで `/revie
 
 ## 注意事項
 
-- 生成された記事は Phase 5.5 で `/review-hatena-diary` による自動レビュー（4 観点並列 + triage + 修正適用）を経た上で出力される
+- 生成された記事は Phase 4-6 で `/review-hatena-diary` による自動レビュー（4 観点並列 + triage + 修正適用）を経た上で出力される
 - ペルソナ調整提案は記事生成中に行ってよいが、適用前にオーナー確認を取る（`narrative-guidelines.md`「ペルソナ調整に関する自己制御」参照）
 - 著作物・IP 情報の混入を避ける（`quality-guidelines.md`「著作物・IP 情報の取り扱い」参照。`/review-hatena-diary` 観点 2「ガイドライン準拠」でも検出する）
