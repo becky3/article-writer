@@ -54,6 +54,10 @@ from publish_hatena import (
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _RANGE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$")
 
+# --interval の許容範囲（秒）。範囲外（下限未満・nan・inf・上限超過）は main で弾く
+INTERVAL_MIN_SECONDS = 0.5
+INTERVAL_MAX_SECONDS = 180
+
 
 def parse_date_arg(arg: str) -> tuple[list[str], bool]:
     """日付引数（単一 or 範囲）を連続日付のリストに展開する.
@@ -404,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
         "--interval",
         type=float,
         default=1.0,
-        help="はてな DELETE を連続実行する際の各リクエスト間の待機秒数（デフォルト: 1.0）",
+        help=f"はてな DELETE を連続実行する際の各リクエスト間の待機秒数（デフォルト: 1.0、許容範囲: {INTERVAL_MIN_SECONDS}〜{INTERVAL_MAX_SECONDS}）",
     )
     args = parser.parse_args(argv)
 
@@ -415,9 +419,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    if args.interval < 0:
+    if not INTERVAL_MIN_SECONDS <= args.interval <= INTERVAL_MAX_SECONDS:
         print(
-            "❌ --interval には 0 以上の秒数を指定してください",
+            f"❌ --interval には {INTERVAL_MIN_SECONDS}〜{INTERVAL_MAX_SECONDS} の秒数を指定してください",
             file=sys.stderr,
         )
         return 1

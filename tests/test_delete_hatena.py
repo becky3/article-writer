@@ -499,7 +499,7 @@ class ProcessTargetsTest(unittest.TestCase):
         sleep_mock.assert_called_once_with(2.0)
 
     def test_no_sleep_when_interval_zero(self) -> None:
-        """interval=0（デフォルト）では time.sleep を呼ばない."""
+        """interval 省略時（process_targets の関数デフォルト 0.0）では time.sleep を呼ばない."""
         targets = [
             self._make_target("2026-05-01", edit_url="u1"),
             self._make_target("2026-05-02", edit_url="u2"),
@@ -619,6 +619,25 @@ class MainExclusiveOptionsTest(unittest.TestCase):
 
     def test_negative_interval_returns_error(self) -> None:
         rc = delete_hatena.main(["2026-05-01", "--interval", "-1"])
+        self.assertEqual(rc, 1)
+
+    def test_nan_interval_returns_error(self) -> None:
+        rc = delete_hatena.main(["2026-05-01", "--interval", "nan"])
+        self.assertEqual(rc, 1)
+
+    def test_inf_interval_returns_error(self) -> None:
+        rc = delete_hatena.main(["2026-05-01", "--interval", "inf"])
+        self.assertEqual(rc, 1)
+
+    def test_interval_over_max_returns_error(self) -> None:
+        rc = delete_hatena.main(
+            ["2026-05-01", "--interval", str(delete_hatena.INTERVAL_MAX_SECONDS + 1)]
+        )
+        self.assertEqual(rc, 1)
+
+    def test_interval_below_min_returns_error(self) -> None:
+        # 下限 0.5 未満（0 を含む）は弾く
+        rc = delete_hatena.main(["2026-05-01", "--interval", "0"])
         self.assertEqual(rc, 1)
 
 
