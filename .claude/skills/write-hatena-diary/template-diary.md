@@ -20,6 +20,7 @@
 title: "{記事タイトル}"
 date: "{YYYY-MM-DD}"
 category: "diary"
+pattern: "{進行パターン ID（A〜J）}"
 ---
 ```
 
@@ -28,6 +29,7 @@ category: "diary"
 - `title` → AtomPub Entry の `<title>`
 - `date` → AtomPub Entry の `<updated>` および `published.jsonl` 記録用の日付キー
 - `category` → AtomPub Entry の `<category term="...">`
+- `pattern` → 進行パターン ID（A〜J）。AtomPub には送信せず、連続回避の参照と `published.jsonl` への転記に使う
 
 ---
 
