@@ -700,7 +700,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
         except OSError as e:
             append_failed = True
-            record = {"date": diary_date, "title": title, "edit_url": edit_url}
+            record: dict[str, str | None] = {
+                "date": diary_date,
+                "title": title,
+                "edit_url": edit_url,
+            }
+            if pattern is not None:
+                record["pattern"] = pattern
             line = json.dumps(record, ensure_ascii=False)
             print(
                 f"  ⚠️ published.jsonl 追記に失敗: {e}\n"
