@@ -445,6 +445,102 @@ class ProcessTargetsTest(unittest.TestCase):
         self.assertTrue(t2.article_path.exists())
         self.assertTrue(t3.article_path.exists())
 
+    def test_interval_sleeps_between_remote_deletes(self) -> None:
+        """interval > 0 のとき、2 件目以降のはてな DELETE 前に time.sleep が (件数-1) 回呼ばれる."""
+        targets = [
+            self._make_target("2026-05-01", edit_url="u1"),
+            self._make_target("2026-05-02", edit_url="u2"),
+            self._make_target("2026-05-03", edit_url="u3"),
+        ]
+        self._write_jsonl([
+            {"date": "2026-05-01", "title": "t", "edit_url": "u1"},
+            {"date": "2026-05-02", "title": "t", "edit_url": "u2"},
+            {"date": "2026-05-03", "title": "t", "edit_url": "u3"},
+        ])
+        sleep_mock = MagicMock()
+        with patch.object(delete_hatena, "PUBLISHED_JSONL", self.jsonl_path), \
+             patch.object(delete_hatena, "REPO_ROOT", pathlib.Path(self.tmpdir.name)), \
+             patch.object(delete_hatena.time, "sleep", sleep_mock), \
+             patch.object(delete_hatena, "_atompub_request", return_value=(204, b"")):
+            results, pending, error = delete_hatena.process_targets(
+                targets, remote_only=True, local_only=False,
+                hatena_id="u", api_key="k", interval=2.0,
+            )
+        self.assertIsNone(error)
+        # 3 件の DELETE のうち、待機は 1 件目の前を除く 2 回
+        self.assertEqual(sleep_mock.call_count, 2)
+        for call in sleep_mock.call_args_list:
+            self.assertEqual(call.args, (2.0,))
+
+    def test_interval_skips_wait_for_entries_without_edit_url(self) -> None:
+        """edit_url 未登録の対象が remote 対象の間に挟まっても、待機は実 DELETE の直前にのみ入る."""
+        targets = [
+            self._make_target("2026-05-01", edit_url="u1"),
+            self._make_target("2026-05-02", edit_url=None),
+            self._make_target("2026-05-03", edit_url="u3"),
+        ]
+        self._write_jsonl([
+            {"date": "2026-05-01", "title": "t", "edit_url": "u1"},
+            {"date": "2026-05-02", "title": "t", "edit_url": None},
+            {"date": "2026-05-03", "title": "t", "edit_url": "u3"},
+        ])
+        sleep_mock = MagicMock()
+        with patch.object(delete_hatena, "PUBLISHED_JSONL", self.jsonl_path), \
+             patch.object(delete_hatena, "REPO_ROOT", pathlib.Path(self.tmpdir.name)), \
+             patch.object(delete_hatena.time, "sleep", sleep_mock), \
+             patch.object(delete_hatena, "_atompub_request", return_value=(204, b"")):
+            results, pending, error = delete_hatena.process_targets(
+                targets, remote_only=True, local_only=False,
+                hatena_id="u", api_key="k", interval=2.0,
+            )
+        self.assertIsNone(error)
+        # 実 DELETE は u1 と u3 の 2 回。待機は u3 の直前 1 回のみ（u1 は初回、u2 はスキップ）
+        self.assertEqual(sleep_mock.call_count, 1)
+        sleep_mock.assert_called_once_with(2.0)
+
+    def test_no_sleep_when_interval_zero(self) -> None:
+        """interval 省略時（process_targets の関数デフォルト 0.0）では time.sleep を呼ばない."""
+        targets = [
+            self._make_target("2026-05-01", edit_url="u1"),
+            self._make_target("2026-05-02", edit_url="u2"),
+        ]
+        self._write_jsonl([
+            {"date": "2026-05-01", "title": "t", "edit_url": "u1"},
+            {"date": "2026-05-02", "title": "t", "edit_url": "u2"},
+        ])
+        sleep_mock = MagicMock()
+        with patch.object(delete_hatena, "PUBLISHED_JSONL", self.jsonl_path), \
+             patch.object(delete_hatena, "REPO_ROOT", pathlib.Path(self.tmpdir.name)), \
+             patch.object(delete_hatena.time, "sleep", sleep_mock), \
+             patch.object(delete_hatena, "_atompub_request", return_value=(204, b"")):
+            delete_hatena.process_targets(
+                targets, remote_only=True, local_only=False,
+                hatena_id="u", api_key="k",
+            )
+        sleep_mock.assert_not_called()
+
+    def test_local_only_does_not_sleep(self) -> None:
+        """--local-only 相当（はてな DELETE なし）では interval を渡しても待機しない."""
+        targets = [
+            self._make_target("2026-05-01", edit_url="u1"),
+            self._make_target("2026-05-02", edit_url="u2"),
+        ]
+        self._write_jsonl([
+            {"date": "2026-05-01", "title": "t", "edit_url": "u1"},
+            {"date": "2026-05-02", "title": "t", "edit_url": "u2"},
+        ])
+        sleep_mock = MagicMock()
+        with patch.object(delete_hatena, "PUBLISHED_JSONL", self.jsonl_path), \
+             patch.object(delete_hatena, "REPO_ROOT", pathlib.Path(self.tmpdir.name)), \
+             patch.object(delete_hatena.time, "sleep", sleep_mock), \
+             patch.object(delete_hatena, "_atompub_request") as atompub_mock:
+            delete_hatena.process_targets(
+                targets, remote_only=False, local_only=True,
+                hatena_id="u", api_key="k", interval=2.0,
+            )
+        atompub_mock.assert_not_called()
+        sleep_mock.assert_not_called()
+
 
 class JsonlRewriteErrorTest(unittest.TestCase):
     """rewrite_published_jsonl の OSError 捕捉と error_msg への組み込みをテスト."""
@@ -519,6 +615,29 @@ class MainExclusiveOptionsTest(unittest.TestCase):
 
     def test_remote_only_and_local_only_returns_error(self) -> None:
         rc = delete_hatena.main(["2026-05-01", "--remote-only", "--local-only"])
+        self.assertEqual(rc, 1)
+
+    def test_negative_interval_returns_error(self) -> None:
+        rc = delete_hatena.main(["2026-05-01", "--interval", "-1"])
+        self.assertEqual(rc, 1)
+
+    def test_nan_interval_returns_error(self) -> None:
+        rc = delete_hatena.main(["2026-05-01", "--interval", "nan"])
+        self.assertEqual(rc, 1)
+
+    def test_inf_interval_returns_error(self) -> None:
+        rc = delete_hatena.main(["2026-05-01", "--interval", "inf"])
+        self.assertEqual(rc, 1)
+
+    def test_interval_over_max_returns_error(self) -> None:
+        rc = delete_hatena.main(
+            ["2026-05-01", "--interval", str(delete_hatena.INTERVAL_MAX_SECONDS + 1)]
+        )
+        self.assertEqual(rc, 1)
+
+    def test_interval_below_min_returns_error(self) -> None:
+        # 下限 0.5 未満（0 を含む）は弾く
+        rc = delete_hatena.main(["2026-05-01", "--interval", "0"])
         self.assertEqual(rc, 1)
 
 

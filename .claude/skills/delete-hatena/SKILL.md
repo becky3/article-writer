@@ -3,7 +3,7 @@ name: delete-hatena
 description: はてなブログのエントリとローカル日記記事を AtomPub DELETE で削除する。範囲指定対応。
 user-invocable: true
 allowed-tools: Bash, Read, Glob
-argument-hint: "<YYYY-MM-DD>[..<YYYY-MM-DD>] [--remote-only|--local-only]"
+argument-hint: "<YYYY-MM-DD>[..<YYYY-MM-DD>] [--remote-only|--local-only] [--interval <秒>]"
 ---
 
 ## タスク
@@ -22,6 +22,7 @@ argument-hint: "<YYYY-MM-DD>[..<YYYY-MM-DD>] [--remote-only|--local-only]"
 - **`YYYY-MM-DD..YYYY-MM-DD`**: 連続範囲の削除（開始日 <= 終了日）
 - **`--remote-only`**: はてな側 DELETE のみ実行。ローカル md は残し、`published.jsonl` 該当行の `edit_url` を `null` に書き換える
 - **`--local-only`**: ローカル md 削除 + `published.jsonl` 該当行削除のみ。はてな側 AtomPub は呼ばない
+- **`--interval <秒>`**: はてな DELETE を連続実行する際の各リクエスト間の待機秒数（デフォルト: 1.0、許容範囲: 0.5〜180）。2 回目以降のはてな DELETE 送信の直前に待機を挟み、バースト送信を避ける。ローカルのみの処理・`edit_url` 未登録の対象は待機しない（実際にはてな DELETE を送信した回数で数えるため、スキップされた対象は待機回数に影響しない）。範囲外（下限未満・上限超過等）はエラー停止する
 
 ### 排他制約
 
@@ -68,7 +69,7 @@ Claude は `$ARGUMENTS` を解析し、以下を確定する:
    - `YYYY-MM-DD`: 単一日付モード
    - `YYYY-MM-DD..YYYY-MM-DD`: 範囲モード（開始 <= 終了であること検証）
    - 上記以外の形式は本スキルを中止し、ユーザーに正しい形式を案内
-2. オプション抽出（`--remote-only` / `--local-only`）。同時指定はエラーで中止
+2. オプション抽出（`--remote-only` / `--local-only` / `--interval <秒>`）。`--remote-only` と `--local-only` の同時指定はエラーで中止
 3. モードに応じたメッセージ生成材料（モード名・対象日数）を準備
 
 ### Phase 2: 削除対象の事前確認（Claude が AskUserQuestion で人に確認）
@@ -93,17 +94,17 @@ Claude は以下を実施する:
 ユーザーが Phase 2 で削除を承認したら、`scripts/delete_hatena.py` を呼ぶ:
 
 ```bash
-python scripts/delete_hatena.py <date_or_range> [--remote-only|--local-only]
+python scripts/delete_hatena.py <date_or_range> [--remote-only|--local-only] [--interval <秒>]
 ```
 
 スクリプトの責務（非対話的に動作。Phase 2 で確認済みのため、呼ばれた時点で削除を実行する）:
 
-1. 引数パース・バリデーション（排他オプション・日付形式・範囲整合性）
+1. 引数パース・バリデーション（排他オプション・日付形式・範囲整合性・`--interval` の範囲チェック（0.5〜180））
 2. 日付リスト展開と対象 md 存在確認（Phase 2 と同等のロジックを Claude 側と二重に持つ。スクリプト単体実行時の正しさを担保するため）
 3. `--remote-only` 時の事前検証: 対象内に `edit_url` が `null`/未登録のエントリがあればエラー停止
 4. `--local-only` 以外: `.env` から `HATENA_ID` を取得し、keyring から `HATENA_API_KEY` を取得する（`HATENA_BLOG_ID` は使用しない）
 5. 各対象を順次処理:
-   - `--local-only` 以外 & `edit_url` あり → AtomPub DELETE 送信
+   - `--local-only` 以外 & `edit_url` あり → AtomPub DELETE 送信。`--interval` 秒 > 0 のとき、2 回目以降のはてな DELETE 送信の直前に `--interval` 秒待機する
    - `--local-only` 以外 & `edit_url` なし → デフォルトモードでははてな側 DELETE をスキップ（`--remote-only` 時はステップ 3 で事前エラー停止しているため本分岐は通らない）
    - `--remote-only` 以外 → ローカル md 物理削除
    - jsonl 更新: `--remote-only` なら `edit_url` を `null` に書き換え（ステップ 3 の事前検証で `edit_url` 未登録のエントリは弾かれるため、ここに到達する対象は必ず行が存在する）、それ以外なら該当行を物理削除
@@ -171,6 +172,7 @@ python scripts/delete_hatena.py <date_or_range> [--remote-only|--local-only]
 | 日付形式が不正（`YYYY-MM-DD` でも範囲記法でもない） | スクリプトがエラー表示 + 停止 |
 | 範囲指定で開始日 > 終了日 | スクリプトがエラー表示 + 停止 |
 | `--remote-only` と `--local-only` の同時指定 | スクリプトがエラー表示 + 停止 |
+| `--interval` が範囲外（0.5〜180 以外、nan/inf 含む） | スクリプトがエラー表示 + 停止 |
 | 単一日付指定で対象 md が存在しない | スクリプトがエラー表示 + 停止 |
 | 範囲指定で対象 md が存在しない日付 | スキップ + 一覧表示して残りで続行（対象 0 件ならエラー停止） |
 | `--remote-only` で対象に `edit_url` 未登録のエントリ混在 | スクリプトがエラー表示 + 停止（はてな側 DELETE 対象がないため）|
