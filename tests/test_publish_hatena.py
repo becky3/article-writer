@@ -285,7 +285,9 @@ class UpdatePublishedTitleTest(unittest.TestCase):
 
     def test_no_file_returns_false(self) -> None:
         # published.jsonl が存在しない場合は False
-        result = publish_hatena.update_published_title("2026-05-13", "新タイトル")
+        result = publish_hatena.update_published_title(
+            "2026-05-13", "新タイトル", "growth"
+        )
         self.assertFalse(result)
 
     def test_matching_date_updates_title_and_keeps_edit_url(self) -> None:
@@ -294,19 +296,40 @@ class UpdatePublishedTitleTest(unittest.TestCase):
             '{"date": "2026-05-13", "title": "旧タイトル", "edit_url": "https://example.com/atom/entry/1"}\n',
             encoding="utf-8",
         )
-        result = publish_hatena.update_published_title("2026-05-13", "新タイトル")
+        result = publish_hatena.update_published_title(
+            "2026-05-13", "新タイトル", "growth"
+        )
         self.assertTrue(result)
         content = self.published_path.read_text(encoding="utf-8")
         obj = json.loads(content.strip())
         self.assertEqual(obj["title"], "新タイトル")
         self.assertEqual(obj["edit_url"], "https://example.com/atom/entry/1")
         self.assertEqual(obj["date"], "2026-05-13")
+        # pattern が同期される
+        self.assertEqual(obj["pattern"], "growth")
+
+    def test_pattern_none_keeps_existing_pattern(self) -> None:
+        # pattern が None の場合、既存の pattern は保持される
+        self.published_path.write_text(
+            '{"date": "2026-05-13", "title": "旧タイトル",'
+            ' "edit_url": null, "pattern": "growth"}\n',
+            encoding="utf-8",
+        )
+        result = publish_hatena.update_published_title(
+            "2026-05-13", "新タイトル", None
+        )
+        self.assertTrue(result)
+        obj = json.loads(self.published_path.read_text(encoding="utf-8").strip())
+        self.assertEqual(obj["title"], "新タイトル")
+        self.assertEqual(obj["pattern"], "growth")
 
     def test_non_matching_date_returns_false_and_keeps_file(self) -> None:
         # 対象日付がない場合は False、ファイル内容は保持される
         original = '{"date": "2026-05-12", "title": "別日付", "edit_url": null}\n'
         self.published_path.write_text(original, encoding="utf-8")
-        result = publish_hatena.update_published_title("2026-05-13", "新タイトル")
+        result = publish_hatena.update_published_title(
+            "2026-05-13", "新タイトル", "growth"
+        )
         self.assertFalse(result)
         self.assertEqual(self.published_path.read_text(encoding="utf-8"), original)
 
@@ -318,14 +341,18 @@ class UpdatePublishedTitleTest(unittest.TestCase):
             '{"date": "2026-05-13", "title": "13 日", "edit_url": "https://example.com/13"}\n',
             encoding="utf-8",
         )
-        result = publish_hatena.update_published_title("2026-05-12", "新 12 日")
+        result = publish_hatena.update_published_title("2026-05-12", "新 12 日", "growth")
         self.assertTrue(result)
         lines = self.published_path.read_text(encoding="utf-8").strip().split("\n")
         self.assertEqual(len(lines), 3)
         self.assertEqual(json.loads(lines[0])["title"], "11 日")
         self.assertEqual(json.loads(lines[1])["title"], "新 12 日")
         self.assertEqual(json.loads(lines[1])["edit_url"], "https://example.com/12")
+        self.assertEqual(json.loads(lines[1])["pattern"], "growth")
         self.assertEqual(json.loads(lines[2])["title"], "13 日")
+        # 他行に pattern が混入しないこと
+        self.assertNotIn("pattern", json.loads(lines[0]))
+        self.assertNotIn("pattern", json.loads(lines[2]))
 
     def test_malformed_and_blank_lines_preserved(self) -> None:
         # 壊れた JSON 行・空行は変更されず保持される
@@ -336,7 +363,7 @@ class UpdatePublishedTitleTest(unittest.TestCase):
             "\n",
             encoding="utf-8",
         )
-        result = publish_hatena.update_published_title("2026-05-13", "新")
+        result = publish_hatena.update_published_title("2026-05-13", "新", "growth")
         self.assertTrue(result)
         content = self.published_path.read_text(encoding="utf-8")
         # 壊れた行と空行が原型のまま残ること
@@ -570,17 +597,28 @@ class AppendPublishedTest(unittest.TestCase):
 
     def test_appends_with_edit_url(self) -> None:
         publish_hatena.append_published(
-            "2026-05-13", "テスト記事", "https://example.com/atom/entry/1"
+            "2026-05-13", "テスト記事", "https://example.com/atom/entry/1", "growth"
         )
         text = self.published_path.read_text(encoding="utf-8")
         self.assertEqual(
             text,
             '{"date": "2026-05-13", "title": "テスト記事",'
-            ' "edit_url": "https://example.com/atom/entry/1"}\n',
+            ' "edit_url": "https://example.com/atom/entry/1",'
+            ' "pattern": "growth"}\n',
         )
 
     def test_appends_with_null_edit_url(self) -> None:
-        publish_hatena.append_published("2026-05-13", "テスト記事", None)
+        publish_hatena.append_published("2026-05-13", "テスト記事", None, "growth")
+        text = self.published_path.read_text(encoding="utf-8")
+        self.assertEqual(
+            text,
+            '{"date": "2026-05-13", "title": "テスト記事",'
+            ' "edit_url": null, "pattern": "growth"}\n',
+        )
+
+    def test_appends_omits_pattern_when_none(self) -> None:
+        # pattern が None の場合、pattern キーは出力されない
+        publish_hatena.append_published("2026-05-13", "テスト記事", None, None)
         text = self.published_path.read_text(encoding="utf-8")
         self.assertEqual(
             text,
@@ -593,19 +631,20 @@ class AppendPublishedTest(unittest.TestCase):
         )
         self.published_path.write_text(existing, encoding="utf-8")
         publish_hatena.append_published(
-            "2026-05-13", "テスト記事", "https://example.com/atom/entry/1"
+            "2026-05-13", "テスト記事", "https://example.com/atom/entry/1", "growth"
         )
         text = self.published_path.read_text(encoding="utf-8")
         self.assertEqual(
             text,
             existing
             + '{"date": "2026-05-13", "title": "テスト記事",'
-            ' "edit_url": "https://example.com/atom/entry/1"}\n',
+            ' "edit_url": "https://example.com/atom/entry/1",'
+            ' "pattern": "growth"}\n',
         )
 
     def test_appends_preserves_non_ascii(self) -> None:
         # ensure_ascii=False により日本語が \\uXXXX エスケープされない
-        publish_hatena.append_published("2026-05-13", "ひらがな", None)
+        publish_hatena.append_published("2026-05-13", "ひらがな", None, "growth")
         text = self.published_path.read_text(encoding="utf-8")
         self.assertIn("ひらがな", text)
         self.assertNotIn("\\u3072", text)
