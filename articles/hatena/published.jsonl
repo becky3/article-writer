@@ -7,7 +7,7 @@
 {"date": "2026-02-17", "title": "実戦テストで即バグ、依存を消したら時刻が壊れた", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032037605312", "pattern": "E"}
 {"date": "2026-02-18", "title": "外部AIに嘘をつかれ、検証は何も測っていなかった", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032037610357", "pattern": "G"}
 {"date": "2026-02-19", "title": "検索チューニングの沼と、社長の冴えた一言", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032037614440", "pattern": "I"}
-{"date": "2026-02-20", "title": "全テスト通過なのに本番で検索ゼロ件、犯人は設定値ひとつ", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032037620364", "pattern": "H"}
+{"date": "2026-02-20", "title": "0.1という数字ひとつで検索結果が全部消えた話", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032037620364", "pattern": "H"}
 {"date": "2026-02-21", "title": "AI任せのRAG、動いたはずなのに『効いてるか』が測れない", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032037622856", "pattern": "D"}
 {"date": "2026-02-22", "title": "結果は良かったのに破棄、検索の作り直しとリポジトリ公開", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032037626982", "pattern": "B"}
 {"date": "2026-02-23", "title": "記事の『言い切り』を直していたら、心が折れかけた", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032037631313", "pattern": "J"}
