@@ -429,7 +429,9 @@ def extract_entry_id(response_body: str) -> str | None:
 def extract_link_href(response_body: str, *, rel: str) -> str | None:
     """レスポンスから指定 rel の link href を取り出す.
 
-    rel="alternate" は人間向けの公開閲覧 URL、rel="edit" は AtomPub の PUT 用 URL。
+    rel="edit" は AtomPub の PUT 用 URL（`.../atom/entry/<entry_id>`）。
+    rel="alternate" は POST 時点の作成時刻ベースの URL で、実際の公開 URL（`<updated>`
+    ベース）と一致しないため使用しない。公開 URL は build_public_url で算出する。
     """
     try:
         root = ET.fromstring(response_body)
@@ -440,6 +442,36 @@ def extract_link_href(response_body: str, *, rel: str) -> str | None:
         if link.get("rel") == rel:
             return link.get("href")
     return None
+
+
+def build_browser_edit_url(
+    *, atom_edit_url: str | None, hatena_id: str, blog_id: str
+) -> str | None:
+    """AtomPub edit URL の末尾 entry_id から、管理画面の編集ページ URL を組み立てる.
+
+    AtomPub edit URL 形式: https://blog.hatena.ne.jp/<HATENA_ID>/<BLOG_ID>/atom/entry/<entry_id>
+    戻り値形式:            https://blog.hatena.ne.jp/<HATENA_ID>/<BLOG_ID>/edit?entry=<entry_id>
+
+    下書き状態でも所有者がアクセスできる唯一の URL。
+    atom_edit_url が None・末尾 entry_id が数値でない場合は None を返す。
+    """
+    if not atom_edit_url:
+        return None
+    entry_id = atom_edit_url.rstrip("/").rsplit("/", 1)[-1]
+    if not entry_id.isdigit():
+        return None
+    return f"https://blog.hatena.ne.jp/{hatena_id}/{blog_id}/edit?entry={entry_id}"
+
+
+def build_public_url(*, blog_id: str, diary_date: str) -> str:
+    """日記対象日から公開記事 URL を組み立てる.
+
+    `<updated>` に `<diary_date>T00:00:00+09:00` を送るため、公開時の URL は
+    `https://<blog_id>/entry/YYYY/MM/DD/000000` になる（はてなブログ標準 URL 形式）。
+    公開されるまでは 404 になる。diary_date は `YYYY-MM-DD` 形式（呼び出し前に検証済み）。
+    """
+    year, month, day = diary_date.split("-")
+    return f"https://{blog_id}/entry/{year}/{month}/{day}/000000"
 
 
 def append_published(
@@ -668,13 +700,20 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     entry_id = extract_entry_id(response)
-    public_url = extract_link_href(response, rel="alternate")
     edit_url = extract_link_href(response, rel="edit")
+    # PUT (--force) でレスポンスに rel=edit が無い場合は既存 edit_url で補完する
+    if edit_url is None and args.force:
+        edit_url = target_edit_url
+    browser_edit_url = build_browser_edit_url(
+        atom_edit_url=edit_url, hatena_id=hatena_id, blog_id=blog_id
+    )
+    public_url = build_public_url(blog_id=blog_id, diary_date=diary_date)
     print(f"✅ {op_label}")
     print(f"  記事: {article_path.relative_to(REPO_ROOT)}")
     print(f"  Entry ID: {entry_id if entry_id else '(取得失敗・管理画面で確認)'}")
-    if public_url:
-        print(f"  URL: {public_url}")
+    if browser_edit_url:
+        print(f"  編集ページ: {browser_edit_url}")
+    print(f"  公開URL: {public_url}")
 
     append_failed = False
     if args.force:

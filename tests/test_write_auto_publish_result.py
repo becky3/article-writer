@@ -15,6 +15,11 @@ import sys
 import tempfile
 import unittest
 
+# scripts/ を import path に追加（関数 API の直接テスト用）
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts"))
+
+import write_auto_publish_result  # noqa: E402
+
 SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "write_auto_publish_result.py"
 
 
@@ -44,7 +49,8 @@ class WriteAutoPublishResultTest(unittest.TestCase):
             "--parent-repo", str(self.parent_repo),
             "--status", "ok",
             "--article-path", "articles/hatena/2026-05-20-diary.md",
-            "--draft-url", "https://blog.example.com/entry/2026/05/20/123456",
+            "--edit-url", "https://blog.hatena.ne.jp/ID/blog.hatenablog.com/edit?entry=123",
+            "--public-url", "https://blog.example.com/entry/2026/05/20/000000",
             "--pr-url", "https://github.com/becky3/article-writer/pull/99",
             "--worktree-removed", "true",
         ])
@@ -53,7 +59,8 @@ class WriteAutoPublishResultTest(unittest.TestCase):
         self.assertEqual(data, {
             "status": "ok",
             "article_path": "articles/hatena/2026-05-20-diary.md",
-            "draft_url": "https://blog.example.com/entry/2026/05/20/123456",
+            "edit_url": "https://blog.hatena.ne.jp/ID/blog.hatenablog.com/edit?entry=123",
+            "public_url": "https://blog.example.com/entry/2026/05/20/000000",
             "pr_url": "https://github.com/becky3/article-writer/pull/99",
             "merged": True,
             "worktree_removed": True,
@@ -65,7 +72,8 @@ class WriteAutoPublishResultTest(unittest.TestCase):
             "--parent-repo", str(self.parent_repo),
             "--status", "ok",
             "--article-path", "articles/hatena/2026-05-20-diary.md",
-            "--draft-url", "https://blog.example.com/entry/x",
+            "--edit-url", "https://blog.hatena.ne.jp/ID/blog.hatenablog.com/edit?entry=456",
+            "--public-url", "https://blog.example.com/entry/2026/05/20/000000",
             "--pr-url", "https://github.com/becky3/article-writer/pull/100",
             "--worktree-removed", "false",
             "--worktree-path", "D:/GitHub/becky3/article-writer-wt-auto-20260520",
@@ -89,7 +97,8 @@ class WriteAutoPublishResultTest(unittest.TestCase):
             "failed_phase": "environment",
             "error": "親リポに未コミット変更があります",
             "article_path": None,
-            "draft_url": None,
+            "edit_url": None,
+            "public_url": None,
             "pr_url": None,
             "merged": False,
             "worktree_removed": False,
@@ -104,7 +113,8 @@ class WriteAutoPublishResultTest(unittest.TestCase):
             "--error", "gh pr merge exit 1",
             "--worktree-path", "D:/wt/x",
             "--article-path", "articles/hatena/2026-05-20-diary.md",
-            "--draft-url", "https://blog/x",
+            "--edit-url", "https://blog.hatena.ne.jp/ID/b/edit?entry=1",
+            "--public-url", "https://blog/entry/2026/05/20/000000",
             "--pr-url", "https://github.com/.../pull/1",
         ])
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -120,13 +130,14 @@ class WriteAutoPublishResultTest(unittest.TestCase):
             "--parent-repo", str(self.parent_repo),
             "--status", "ok",
             "--article-path", "articles/hatena/2026-05-20-diary.md",
-            "--draft-url", "https://blog/entry?a=1&b=\"quoted\"&c=back\\slash&d=$VAR",
+            "--edit-url", "https://blog/entry?a=1&b=\"quoted\"&c=back\\slash&d=$VAR",
+            "--public-url", "https://blog/entry/2026/05/20/000000",
             "--pr-url", "https://github.com/.../pull/1",
             "--worktree-removed", "true",
         ])
         self.assertEqual(result.returncode, 0, result.stderr)
         data = self._read_result()
-        self.assertEqual(data["draft_url"], "https://blog/entry?a=1&b=\"quoted\"&c=back\\slash&d=$VAR")
+        self.assertEqual(data["edit_url"], "https://blog/entry?a=1&b=\"quoted\"&c=back\\slash&d=$VAR")
 
     def test_japanese_in_error_message(self) -> None:
         result = run_script([
@@ -175,7 +186,8 @@ class WriteAutoPublishResultTest(unittest.TestCase):
             "--parent-repo", str(self.parent_repo),
             "--status", "ok",
             "--article-path", "x.md",
-            "--draft-url", "https://x",
+            "--edit-url", "https://x",
+            "--public-url", "https://x2",
             "--pr-url", "https://y",
             "--worktree-removed", "false",
         ])
@@ -201,13 +213,67 @@ class WriteAutoPublishResultTest(unittest.TestCase):
             "--parent-repo", str(self.parent_repo),
             "--status", "ok",
             "--article-path", "x.md",
-            "--draft-url", "https://x",
+            "--edit-url", "https://x",
+            "--public-url", "https://x2",
             "--pr-url", "https://y",
             "--worktree-removed", "true",
         ])
         self.assertEqual(result.returncode, 0, result.stderr)
         leftover = list(self.result_path.parent.glob(".result.json.*"))
         self.assertEqual(leftover, [], f"atomic write temp files left behind: {leftover}")
+
+
+class BuildResultFunctionTest(unittest.TestCase):
+    """orchestrator が import して使う build_result / write_result_file の直接テスト。"""
+
+    def test_build_result_ok_normalizes_worktree_path_when_removed(self) -> None:
+        result = write_auto_publish_result.build_result(
+            status="ok",
+            article_path="a.md",
+            edit_url="https://e",
+            public_url="https://p",
+            pr_url="https://pr",
+            worktree_removed=True,
+            worktree_path="D:/wt/x",
+        )
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["edit_url"], "https://e")
+        self.assertEqual(result["public_url"], "https://p")
+        self.assertEqual(result["merged"], True)
+        self.assertEqual(result["worktree_removed"], True)
+        self.assertIsNone(result["worktree_path"])
+
+    def test_build_result_error_includes_partial_fields(self) -> None:
+        result = write_auto_publish_result.build_result(
+            status="error",
+            failed_phase="publish",
+            error="HTTP 401",
+            article_path="a.md",
+            worktree_path="D:/wt/x",
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["failed_phase"], "publish")
+        self.assertEqual(result["merged"], False)
+        self.assertEqual(result["worktree_removed"], False)
+        self.assertIsNone(result["edit_url"])
+        self.assertIsNone(result["public_url"])
+
+    def test_write_result_file_atomic_no_leftover(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            result = write_auto_publish_result.build_result(
+                status="ok",
+                article_path="a.md",
+                edit_url="https://e",
+                public_url="https://p",
+                pr_url="https://pr",
+                worktree_removed=True,
+            )
+            write_auto_publish_result.write_result_file(d, result)
+            target = pathlib.Path(d) / ".tmp" / "auto-publish-diary" / "result.json"
+            self.assertTrue(target.exists())
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8"))["status"], "ok")
+            leftover = list(target.parent.glob(".result.json.*"))
+            self.assertEqual(leftover, [])
 
 
 if __name__ == "__main__":

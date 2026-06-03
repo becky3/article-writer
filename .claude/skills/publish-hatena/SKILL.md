@@ -105,7 +105,11 @@ python scripts/publish_hatena.py [<DATE>] [--force]
     - `edit_url` 抽出に失敗した場合: WARNING を出して `"edit_url": null` で追記する（次回 `--force` 前に手動書き換えが必要、終了コード `0`）
     - 追記が I/O 失敗した場合: WARNING + 追記すべき 1 行を明示し終了コード `1`（投稿自体は成功している点を明示）
 13. PUT 成功時は `published.jsonl` の該当行の `title` を最新タイトルに更新する（`edit_url` は既存値を保持、行追加はしない）
-14. レスポンスの `<link rel="alternate" href="..."/>`（公開閲覧 URL）と `<atom:id>` を画面表示する
+14. URL を 2 種類画面表示する:
+    - **編集ページ URL**: レスポンスの `<link rel="edit" href="..."/>`（`.../atom/entry/<entry_id>`）の末尾 `entry_id` から `https://blog.hatena.ne.jp/<HATENA_ID>/<HATENA_BLOG_ID>/edit?entry=<entry_id>` を組み立てる。
+      - 下書き状態でも所有者がアクセスできる唯一の URL。`entry_id` を抽出できない場合は表示しない
+    - **公開 URL**: フロントマター `date:` から `https://<HATENA_BLOG_ID>/entry/YYYY/MM/DD/000000` を組み立てる（`<updated>` を JST 0 時で送るためこの形式になる）。公開されるまでは 404
+    - `<link rel="alternate" href="..."/>` は **使用しない**。POST 時点の作成時刻ベースの URL で、実際の公開 URL（`<updated>` ベース）と一致しないため
 
 ### Phase 3: 結果報告
 
@@ -117,7 +121,8 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 ✅ 下書き登録成功
   記事: articles/hatena/...
   Entry ID: tag:blog.hatena.ne.jp,...:entry-...
-  URL: https://<blog>/entry/...
+  編集ページ: https://blog.hatena.ne.jp/<HATENA_ID>/<HATENA_BLOG_ID>/edit?entry=<entry_id>
+  公開URL: https://<HATENA_BLOG_ID>/entry/YYYY/MM/DD/000000
   published.jsonl に追記済み（edit_url 含む）
   管理画面: https://blog.hatena.ne.jp/<HATENA_ID>/<HATENA_BLOG_ID>/edit
 ```
@@ -132,7 +137,8 @@ python scripts/publish_hatena.py [<DATE>] [--force]
 ✅ 更新成功（公開状態を維持） ／ 更新成功（下書き状態を維持）    # GET で取得した状態に応じて表示が切り替わる
   記事: articles/hatena/...
   Entry ID: tag:blog.hatena.ne.jp,...:entry-...
-  URL: https://<blog>/entry/...
+  編集ページ: https://blog.hatena.ne.jp/<HATENA_ID>/<HATENA_BLOG_ID>/edit?entry=<entry_id>
+  公開URL: https://<HATENA_BLOG_ID>/entry/YYYY/MM/DD/000000
   published.jsonl の title を最新タイトルに更新（edit_url は保持）
   管理画面: https://blog.hatena.ne.jp/<HATENA_ID>/<HATENA_BLOG_ID>/edit
 ```

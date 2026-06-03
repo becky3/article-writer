@@ -681,5 +681,53 @@ class ExtractLinkHrefTest(unittest.TestCase):
         )
 
 
+class BuildBrowserEditUrlTest(unittest.TestCase):
+    def test_extracts_entry_id_and_builds_edit_page_url(self) -> None:
+        url = publish_hatena.build_browser_edit_url(
+            atom_edit_url="https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032038151421",
+            hatena_id="beckyJPN",
+            blog_id="beckyjpn.hatenablog.com",
+        )
+        self.assertEqual(
+            url,
+            "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/edit?entry=14945776032038151421",
+        )
+
+    def test_trailing_slash_is_tolerated(self) -> None:
+        url = publish_hatena.build_browser_edit_url(
+            atom_edit_url="https://blog.hatena.ne.jp/foo/bar/atom/entry/123/",
+            hatena_id="foo",
+            blog_id="bar",
+        )
+        self.assertEqual(url, "https://blog.hatena.ne.jp/foo/bar/edit?entry=123")
+
+    def test_none_atom_edit_url_returns_none(self) -> None:
+        self.assertIsNone(
+            publish_hatena.build_browser_edit_url(
+                atom_edit_url=None, hatena_id="foo", blog_id="bar"
+            )
+        )
+
+    def test_non_numeric_entry_id_returns_none(self) -> None:
+        # 末尾が entry_id でない（コレクション URL 等）場合は None
+        self.assertIsNone(
+            publish_hatena.build_browser_edit_url(
+                atom_edit_url="https://blog.hatena.ne.jp/foo/bar/atom/entry",
+                hatena_id="foo",
+                blog_id="bar",
+            )
+        )
+
+
+class BuildPublicUrlTest(unittest.TestCase):
+    def test_builds_public_url_from_diary_date(self) -> None:
+        url = publish_hatena.build_public_url(
+            blog_id="beckyjpn.hatenablog.com", diary_date="2026-03-14"
+        )
+        self.assertEqual(
+            url, "https://beckyjpn.hatenablog.com/entry/2026/03/14/000000"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
