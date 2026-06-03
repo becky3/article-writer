@@ -266,8 +266,13 @@ def cmd_finalize(article_path: str) -> int:
         detail = tail[-1] if tail else "(stderr 空)"
         fail(state, failed_phase="publish", error=f"publish_hatena.py exit {publish.returncode}: {detail}")
 
-    # URL は stdout grep せず published.jsonl + 純粋関数で組み立てる
-    edit_url, public_url = derive_publish_urls(article_date)
+    # URL は stdout grep せず published.jsonl + 純粋関数で組み立てる。
+    # load_env/require_env は SystemExit を投げうるため捕捉して fail() に合流させる
+    # （result.json を必ず書く契約のため、未捕捉の SystemExit で素抜けさせない）
+    try:
+        edit_url, public_url = derive_publish_urls(article_date)
+    except SystemExit as exc:
+        fail(state, failed_phase="publish", error=f"URL 組み立て中の環境エラー: {exc}")
     if not edit_url:
         fail(
             state,
@@ -294,14 +299,17 @@ def cmd_finalize(article_path: str) -> int:
     if push.returncode != 0:
         fail(state, failed_phase="git", error="git push に失敗")
 
-    pr_body = build_pr_body(
-        worktree_path,
-        title=article_title,
-        date=article_date,
-        article_path=article_path,
-        edit_url=edit_url,
-        public_url=public_url,
-    )
+    try:
+        pr_body = build_pr_body(
+            worktree_path,
+            title=article_title,
+            date=article_date,
+            article_path=article_path,
+            edit_url=edit_url,
+            public_url=public_url,
+        )
+    except OSError as exc:
+        fail(state, failed_phase="git", error=f"PR 本文テンプレの読み取りに失敗: {exc}")
     try:
         create = _run(
             [
@@ -382,6 +390,9 @@ def cleanup(parent_repo: str, worktree_path: str, branch_name: str) -> bool:
     Returns:
         worktree 削除に成功したか（Windows ロック等で失敗しても status=ok を保つため bool を返す）
     """
+    # finalize は worktree を cwd として起動される。Windows では cwd が worktree 内に
+    # ある間はディレクトリを削除できないため、remove 前に親リポへ chdir して cwd ロックを
+    # 解放する（git 呼び出し自体は -C で repo を指定済み。chdir は OS の cwd ロック対策）。
     os.chdir(parent_repo)
     removed = (
         _run(["git", "-C", parent_repo, "worktree", "remove", "--force", worktree_path]).returncode
