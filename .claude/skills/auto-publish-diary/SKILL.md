@@ -129,7 +129,7 @@ python scripts/auto_publish_diary.py finalize --article-path "$ARTICLE_PATH"
 ```
 
 - Phase 2: `publish_hatena.py` を subprocess 起動して下書き登録 → `published.jsonl` から `edit_url` を読み、編集ページ URL・公開 URL を組み立てる
-- Phase 3: git add / commit / push / `gh pr create` / `gh pr merge --squash --admin --delete-branch`
+- Phase 3: git add / commit / push / `gh pr create` / `gh pr merge --squash --admin`
 - Phase 4: 親リポへ戻り worktree 削除・ローカルブランチ削除・main 同期（削除失敗でも `status=ok`）
 - Phase 5: `status=ok` の result.json を書き込む
 - いずれかの Phase で失敗したら、`failed_phase` 付きの result.json を書き込み終了コード 1 で終了する

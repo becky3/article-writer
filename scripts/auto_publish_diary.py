@@ -334,7 +334,7 @@ def cmd_finalize(article_path: str) -> int:
 
     try:
         merge = _run(
-            ["gh", "pr", "merge", pr_number, "--squash", "--admin", "--delete-branch"],
+            ["gh", "pr", "merge", pr_number, "--squash", "--admin"],
             cwd=worktree_path,
             timeout=NETWORK_TIMEOUT,
         )
@@ -387,6 +387,9 @@ def build_pr_body(
 def cleanup(parent_repo: str, worktree_path: str, branch_name: str) -> bool:
     """worktree 削除・ローカルブランチ削除・親リポ main 同期。
 
+    前提: `gh pr merge --squash --admin` が成功した直後に限定して呼び出すこと。
+    未マージブランチに対して呼ぶと `git branch -D` で未マージ変更が失われる。
+
     Returns:
         worktree 削除に成功したか（Windows ロック等で失敗しても status=ok を保つため bool を返す）
     """
@@ -398,8 +401,9 @@ def cleanup(parent_repo: str, worktree_path: str, branch_name: str) -> bool:
         _run(["git", "-C", parent_repo, "worktree", "remove", "--force", worktree_path]).returncode
         == 0
     )
-    # マージ済みのみ削除する -d（-D 強制は使わない）。失敗は無視
-    _run(["git", "-C", parent_repo, "branch", "-d", branch_name])
+    # squash マージ後は -d が「not fully merged」で失敗するため -D で強制削除する。
+    # gh pr merge --admin --squash 成功直後に限定して呼ぶため安全。失敗は無視
+    _run(["git", "-C", parent_repo, "branch", "-D", branch_name])
     # squash マージ済みコミットをローカル main へ取り込む（失敗は無視）
     try:
         _run(
