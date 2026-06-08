@@ -93,7 +93,12 @@ def fail(state: PublishState, *, failed_phase: str, error: str) -> None:
     sys.exit(1)
 
 
-def finish(state: PublishState, *, worktree_removed: bool) -> None:
+def finish(
+    state: PublishState,
+    *,
+    worktree_removed: bool,
+    worktree_remove_error: str | None = None,
+) -> None:
     """status=ok の result.json を書き出す（成功経路）。"""
     result = write_auto_publish_result.build_result(
         status="ok",
@@ -103,6 +108,7 @@ def finish(state: PublishState, *, worktree_removed: bool) -> None:
         pr_url=state.pr_url,
         worktree_removed=worktree_removed,
         worktree_path=state.worktree_path,
+        worktree_remove_error=worktree_remove_error,
     )
     try:
         write_auto_publish_result.write_result_file(state.parent_repo, result)
@@ -341,17 +347,40 @@ def cmd_finalize(article_path: str) -> int:
     except subprocess.TimeoutExpired:
         fail(state, failed_phase="git", error="gh pr merge がタイムアウト（120 秒）")
     if merge.returncode != 0:
-        fail(state, failed_phase="git", error=f"gh pr merge に失敗: {(merge.stderr or '').strip()}")
+        # ネットワーク一時失敗・将来的な `--delete-branch` 副作用等で「リモートはマージ済み
+        # なのに exit 非 0」となるケースを救うため、リモートの実 state を 1 回だけ確認する
+        # （#219）。
+        merge_stderr = _summarize_stderr(merge.stderr) or "(stderr 空)"
+        pr_state = _query_pr_state(pr_number, worktree_path)
+        if pr_state == "MERGED":
+            sys.stderr.write(
+                f"WARNING: gh pr merge exit {merge.returncode} / state=MERGED で継続: "
+                f"{merge_stderr}\n"
+            )
+        else:
+            state_detail = f" / state={pr_state}" if pr_state else " / state 取得失敗"
+            fail(
+                state,
+                failed_phase="git",
+                error=f"gh pr merge に失敗: {merge_stderr}{state_detail}",
+            )
 
     # --- Phase 4: worktree クリーンアップ（失敗しても status=ok）---
-    worktree_removed = cleanup(parent_repo, worktree_path, branch_name)
+    worktree_removed, worktree_remove_error = cleanup(parent_repo, worktree_path, branch_name)
 
     # --- Phase 5: 成功 result.json ---
-    finish(state, worktree_removed=worktree_removed)
+    finish(
+        state,
+        worktree_removed=worktree_removed,
+        worktree_remove_error=worktree_remove_error,
+    )
     if worktree_removed:
         print("✅ /auto-publish-diary 全工程成功")
     else:
-        print(f"✅ /auto-publish-diary 全工程成功（worktree 削除のみ失敗: {worktree_path}）")
+        detail = f" / stderr: {worktree_remove_error}" if worktree_remove_error else ""
+        print(
+            f"✅ /auto-publish-diary 全工程成功（worktree 削除のみ失敗: {worktree_path}{detail}）"
+        )
     return 0
 
 
@@ -384,23 +413,29 @@ def build_pr_body(
     return body
 
 
-def cleanup(parent_repo: str, worktree_path: str, branch_name: str) -> bool:
+def cleanup(
+    parent_repo: str, worktree_path: str, branch_name: str
+) -> tuple[bool, str | None]:
     """worktree 削除・ローカルブランチ削除・親リポ main 同期。
 
     前提: `gh pr merge --squash --admin` が成功した直後に限定して呼び出すこと。
     未マージブランチに対して呼ぶと `git branch -D` で未マージ変更が失われる。
 
     Returns:
-        worktree 削除に成功したか（Windows ロック等で失敗しても status=ok を保つため bool を返す）
+        (worktree 削除成否, 削除失敗時の stderr 1 行要約).
+        Windows ロック等で失敗しても status=ok を保つため bool で返す。失敗時の
+        stderr は #240 観測強化の一環として 1 行要約で返し、呼び出し元が
+        result.json に伝播させる。
     """
     # finalize は worktree を cwd として起動される。Windows では cwd が worktree 内に
     # ある間はディレクトリを削除できないため、remove 前に親リポへ chdir して cwd ロックを
     # 解放する（git 呼び出し自体は -C で repo を指定済み。chdir は OS の cwd ロック対策）。
     os.chdir(parent_repo)
-    removed = (
-        _run(["git", "-C", parent_repo, "worktree", "remove", "--force", worktree_path]).returncode
-        == 0
+    remove_proc = _run(
+        ["git", "-C", parent_repo, "worktree", "remove", "--force", worktree_path]
     )
+    removed = remove_proc.returncode == 0
+    remove_error = None if removed else _summarize_stderr(remove_proc.stderr)
     # squash マージ後は -d が「not fully merged」で失敗するため -D で強制削除する。
     # gh pr merge --admin --squash 成功直後に限定して呼ぶため安全。失敗は無視
     _run(["git", "-C", parent_repo, "branch", "-D", branch_name])
@@ -413,7 +448,40 @@ def cleanup(parent_repo: str, worktree_path: str, branch_name: str) -> bool:
         )
     except subprocess.TimeoutExpired:
         pass
-    return removed
+    return removed, remove_error
+
+
+def _query_pr_state(pr_number: str, cwd: str) -> str | None:
+    """`gh pr view <num> --json state --jq .state` を 1 回だけ呼んで state 文字列を返す。
+
+    マージ判定の正確性向上のため、`gh pr merge` の exit code が非 0 のときの保険として
+    リモート state を確認する用途（#219）。タイムアウト・取得失敗時は None を返す。
+
+    cwd は worktree パスを渡す前提（gh のリポジトリ自動検出を利用するため）。worktree が
+    壊れている等で gh 自身が exit 非 0 になった場合も None 返却で `fail()` 経路へ合流する。
+    """
+    try:
+        view = _run(
+            ["gh", "pr", "view", pr_number, "--json", "state", "--jq", ".state"],
+            cwd=cwd,
+            timeout=NETWORK_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    if view.returncode != 0:
+        return None
+    return (view.stdout or "").strip() or None
+
+
+def _summarize_stderr(stderr: str | None) -> str | None:
+    """subprocess の stderr を result.json 用に 1 行要約にする。
+
+    複数行を半角空白で連結し、前後の空白を除去する。空文字は None に正規化する。
+    """
+    if not stderr:
+        return None
+    summary = " ".join(stderr.split())
+    return summary or None
 
 
 def main(argv: list[str] | None = None) -> int:

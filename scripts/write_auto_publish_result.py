@@ -3,7 +3,7 @@
 呼び出し元（ai-assistant 等）が `claude -p` の出力経路差に依存せずファイル経由で
 成否・URL 等を取得できるよう、出力契約をレスポンスファイル方式に統一する。
 
-本スクリプトの出力契約定義および Phase ごとの呼び出し位置・引数組み合わせは
+出力契約（result.json スキーマ）の SSoT は本ファイルの `build_result()`。Phase ごとの呼び出し位置・引数組み合わせの運用文脈は
 `.claude/skills/auto-publish-diary/SKILL.md`「出力仕様」セクションを参照する。
 
 Usage（成功時、worktree 削除済み）:
@@ -19,7 +19,8 @@ Usage（成功時、worktree 削除失敗）:
     python scripts/write_auto_publish_result.py \\
         --parent-repo /path/to/parent --status ok \\
         --article-path ... --edit-url ... --public-url ... --pr-url ... \\
-        --worktree-removed false --worktree-path /abs/path/to/wt
+        --worktree-removed false --worktree-path /abs/path/to/wt \\
+        --worktree-remove-error "fatal: '/abs/path/to/wt' is not a working tree"
 
 Usage（失敗時）:
     python scripts/write_auto_publish_result.py \\
@@ -48,13 +49,33 @@ def build_result(
     pr_url: str | None = None,
     worktree_removed: bool = False,
     worktree_path: str | None = None,
+    worktree_remove_error: str | None = None,
     failed_phase: str | None = None,
     error: str | None = None,
 ) -> dict:
-    """result.json の中身（dict）を組み立てる.
+    """result.json の中身（dict）を組み立てる（出力スキーマの SSoT）.
 
     `auto_publish_diary.py`（orchestrator）と CLI の双方から呼ばれる共通ロジック。
     `status="ok"` のとき `worktree_removed=True` なら `worktree_path` は None に正規化する。
+
+    キー定義（status="ok" / "error" で共通スキーマ。値の意味は status で変わる）:
+
+    - status: "ok"（全 Phase 成功。`worktree_removed=false` の中間状態を含む）/ "error"（任意 Phase で停止）
+    - article_path: 生成記事の相対パス。生成前に失敗した場合は None
+    - edit_url: はてなブログの編集ページ URL（`https://blog.hatena.ne.jp/<ID>/<BLOG>/edit?entry=<id>`）。
+      下書き状態でも所有者がアクセスできる。投稿前に失敗した場合は None
+    - public_url: 公開記事 URL（`https://<BLOG>/entry/YYYY/MM/DD/000000`、記事日付ベースで算出。
+      公開されるまでは 404）。投稿前に失敗した場合は None
+    - pr_url: 作成された PR の URL。PR 作成前に失敗した場合は None
+    - merged: PR がリモートでマージ済みなら true（status="ok" なら必ず true、"error" なら必ず false）
+    - worktree_removed: cleanup で worktree が削除済みなら true。削除失敗時 / 失敗終了時は false
+    - worktree_path: 削除失敗時は残置 worktree の絶対パス。削除済みなら None。
+      worktree 作成前に失敗した場合は None
+    - worktree_remove_error: worktree 削除失敗時の `git worktree remove --force` stderr 1 行要約。
+      削除成功時 / status="error" 時は None（失敗そのものは `error` フィールドで報告される）
+    - failed_phase: status="error" のみ。失敗 Phase 名（`environment` / `write` / `publish` / `git`）。
+      `cleanup` は仕様上 status="ok" で終了するため現れない。status="ok" 時はキー自体が省略される
+    - error: status="error" のみのエラー要約 1 行。status="ok" 時はキー自体が省略される
     """
     if status == "ok":
         return {
@@ -66,6 +87,7 @@ def build_result(
             "merged": True,
             "worktree_removed": worktree_removed,
             "worktree_path": None if worktree_removed else worktree_path,
+            "worktree_remove_error": None if worktree_removed else worktree_remove_error,
         }
     return {
         "status": "error",
@@ -78,6 +100,7 @@ def build_result(
         "merged": False,
         "worktree_removed": False,
         "worktree_path": worktree_path,
+        "worktree_remove_error": None,
     }
 
 
@@ -139,6 +162,7 @@ def main() -> int:
     parser.add_argument("--pr-url", default=None)
     parser.add_argument("--worktree-removed", choices=["true", "false"], default=None)
     parser.add_argument("--worktree-path", default=None)
+    parser.add_argument("--worktree-remove-error", default=None)
     parser.add_argument("--failed-phase", default=None)
     parser.add_argument("--error", default=None)
     args = parser.parse_args()
@@ -156,6 +180,7 @@ def main() -> int:
         pr_url=args.pr_url,
         worktree_removed=args.worktree_removed == "true",
         worktree_path=args.worktree_path,
+        worktree_remove_error=args.worktree_remove_error,
         failed_phase=args.failed_phase,
         error=args.error,
     )
