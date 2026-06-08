@@ -41,38 +41,25 @@ argument-hint: "(引数なし)"
 
 呼び出し元への結果伝達は `scripts/auto_publish_diary.py` が書き出す **レスポンスファイル** `$PARENT_REPO/.tmp/auto-publish-diary/result.json` で行う。配置先は **親リポ固定**（worktree は cleanup で削除されるため）。`setup` 冒頭で前回残骸を削除し、成功時・失敗時の両方で必ず書き込む。
 
-成功時（全工程完了、worktree 削除済み）:
+dict 生成の SSoT は `scripts/write_auto_publish_result.py` の `build_result()`。
+result.json のスキーマ・各キーの意味・正規化ルール・`status` による分岐は同関数の docstring を参照する。
+実例の JSON サンプルは `tests/test_write_auto_publish_result.py` の各テストケース（ok/削除済み・ok/削除失敗・error 等）を参照する。
 
-```json
-{"status":"ok","article_path":"articles/hatena/YYYY-MM-DD-diary.md","edit_url":"https://blog.hatena.ne.jp/<ID>/<BLOG>/edit?entry=<entry_id>","public_url":"https://<BLOG>/entry/YYYY/MM/DD/000000","pr_url":"https://github.com/becky3/article-writer/pull/N","merged":true,"worktree_removed":true,"worktree_path":null}
-```
+`status` は `"ok"`（全 Phase 成功。`worktree_removed=false` の中間状態を含む）または `"error"`（任意 Phase で停止）の 2 値。スキーマのキー一覧（型と status 別出現条件のみ。各キーの意味・正規化ルールの SSoT は `build_result()` docstring）:
 
-成功時（worktree 削除失敗、その他は完了）:
-
-```json
-{"status":"ok","article_path":"...","edit_url":"...","public_url":"...","pr_url":"...","merged":true,"worktree_removed":false,"worktree_path":"D:/GitHub/becky3/article-writer-wt-auto-YYYYMMDD"}
-```
-
-失敗時（共通フィールドは同順。`worktree_removed` は失敗時も常に `false`）:
-
-```json
-{"status":"error","failed_phase":"<Phase 名>","error":"<エラー要約 1 行>","article_path":"<生成済みなら相対パス、なければ null>","edit_url":"<登録済みなら編集ページ URL、なければ null>","public_url":"<登録済みなら公開 URL、なければ null>","pr_url":"<作成済みなら URL、なければ null>","merged":false,"worktree_removed":false,"worktree_path":"<残置 worktree の絶対パス or null>"}
-```
-
-JSON フィールドの説明（全モード共通スキーマ）:
-
-| フィールド | 型 | 成功時 | 失敗時 |
+| フィールド | 型 | status="ok" | status="error" |
 |---|---|---|---|
-| `status` | string | `"ok"` | `"error"` |
-| `article_path` | string \| null | 生成記事の相対パス | 生成済みなら相対パス、なければ null |
-| `edit_url` | string \| null | はてなブログの編集ページ URL（`https://blog.hatena.ne.jp/<ID>/<BLOG>/edit?entry=<entry_id>`）。下書き状態でも所有者がアクセスできる | 登録済みなら URL、なければ null |
-| `public_url` | string \| null | 公開記事 URL（`https://<BLOG>/entry/YYYY/MM/DD/000000`）。記事日付ベースで算出。公開されるまでは 404 | 登録済みなら URL、なければ null |
-| `pr_url` | string \| null | 作成された PR の URL | 作成済みなら URL、なければ null |
-| `merged` | bool | true | false |
-| `worktree_removed` | bool | 削除済みなら true / 削除失敗時は false | false |
-| `worktree_path` | string \| null | 削除済みなら null / 削除失敗時は残置パス | 残置 worktree の絶対パス（worktree 作成前に失敗した場合は null） |
-| `failed_phase` | string | （省略） | 失敗 Phase 名（`environment` / `write` / `publish` / `git`）。`cleanup`（worktree 削除失敗）は仕様上 `status=ok` で終了するため現れない |
-| `error` | string | （省略） | エラー要約 1 行 |
+| `status` | string | 必須 | 必須 |
+| `article_path` | string \| null | 必須 | 必須 |
+| `edit_url` | string \| null | 必須 | 必須 |
+| `public_url` | string \| null | 必須 | 必須 |
+| `pr_url` | string \| null | 必須 | 必須 |
+| `merged` | bool | 必須 | 必須 |
+| `worktree_removed` | bool | 必須 | 必須 |
+| `worktree_path` | string \| null | 必須 | 必須 |
+| `worktree_remove_error` | string \| null | 必須 | 必須 |
+| `failed_phase` | string | キー省略 | 必須 |
+| `error` | string | キー省略 | 必須 |
 
 ### 終了コード
 
@@ -129,7 +116,7 @@ python scripts/auto_publish_diary.py finalize --article-path "$ARTICLE_PATH"
 ```
 
 - Phase 2: `publish_hatena.py` を subprocess 起動して下書き登録 → `published.jsonl` から `edit_url` を読み、編集ページ URL・公開 URL を組み立てる
-- Phase 3: git add / commit / push / `gh pr create` / `gh pr merge --squash --admin`
+- Phase 3: git add / commit / push / `gh pr create` / `gh pr merge --squash --admin`（merge が exit 非 0 のときは `gh pr view --json state` で `MERGED` を確認できれば継続。Why は「注意事項」参照）
 - Phase 4: 親リポへ戻り worktree 削除・ローカルブランチ削除・main 同期（削除失敗でも `status=ok`）
 - Phase 5: `status=ok` の result.json を書き込む
 - いずれかの Phase で失敗したら、`failed_phase` 付きの result.json を書き込み終了コード 1 で終了する
@@ -145,8 +132,9 @@ result.json への書き込みと終了コードは `scripts/auto_publish_diary.
 | worktree 内からの起動 / 親リポに未コミット変更 / `git switch main`・`pull` 失敗 / 同名ブランチ既存 / `git worktree add` 失敗 / `.env` 不整合 | environment | 以降スキップ |
 | `/write-hatena-diary` 失敗・生成記事 0 件（`finalize` に空パスが渡る） | write | publish 以降スキップ、worktree 残置 |
 | `publish_hatena.py` 失敗（HTTP 4xx/5xx・keyring 未登録等）/ 編集 URL 組み立て失敗 | publish | git 以降スキップ、worktree + 記事 md は残置（再投稿可能） |
-| フロントマター読取失敗 / `git commit`・`push` 失敗 / `gh pr create`・`merge` 失敗 | git | 後続スキップ、worktree 残置 |
-| `git worktree remove` 失敗（Windows ロック等） | (なし) | warning のみ。`status=ok` + `worktree_removed=false` で終了 |
+| フロントマター読取失敗 / `git commit`・`push` 失敗 / `gh pr create` 失敗 / `gh pr merge` 失敗かつリモート state ≠ `MERGED` | git | 後続スキップ、worktree 残置 |
+| `gh pr merge` exit 非 0 だがリモート state = `MERGED` | (なし) | warning のみ。Phase 4 へ継続（#219） |
+| `git worktree remove` 失敗（Windows ロック等） | (なし) | warning のみ。`status=ok` + `worktree_removed=false` + `worktree_remove_error` に stderr 要約を格納して終了 |
 | 外部コマンドのタイムアウト（120 秒超過） | 該当 Phase | error メッセージに「タイムアウト（120 秒）」を含めて識別可能にする |
 
 ## リカバリフロー
@@ -180,6 +168,11 @@ result.json への書き込みと終了コードは `scripts/auto_publish_diary.
 - 本スキルは **無人実行** が前提。`claude -p` 非対話モードでは `AskUserQuestion` がエラー扱いされるため発行しない
 - レビューでの修正適用は `/write-hatena-diary --auto-publish` 内の書き手自己判断に従う
 - PR は `gh pr merge --admin --squash` で即マージするため、ブランチ保護ルールがあっても通る。CI 実行は main へのマージ後（post-merge）に発生する想定
+- **Phase 3 merge の判定二段化**: `gh pr merge` の exit code が非 0 でも、続けて
+  `gh pr view <pr_number> --json state --jq .state` を 1 回呼び、`MERGED` が返れば成功扱いで
+  Phase 4 に進む。`MERGED` 以外（取得失敗・タイムアウト含む）は従来通り `failed_phase=git` で
+  停止する。リモートはマージ済みなのにローカル副作用で `gh pr merge` が非 0 を返すケース
+  （#219）の救済
 - **`gh pr merge --admin` 前提**: `gh auth status` で確認できる認証ユーザーが対象リポの Admin 権限を持つこと。becky3 個人リポではオーナー権限で満たすが、組織リポへ移行する場合は権限要件を再確認すること
 - 同日二重実行は Phase 0 でブランチ名重複エラー（`failed_phase=environment`）になる。Slack 側で「本日は既に投稿済み」と通知できる
 - **PR テンプレ配置の副作用**: `.github/PULL_REQUEST_TEMPLATE/auto-diary.md` は本スキル専用テンプレ。

@@ -124,6 +124,41 @@ class FailFinishTest(unittest.TestCase):
         data = self._read()
         self.assertEqual(data["worktree_removed"], False)
         self.assertEqual(data["worktree_path"], "D:/wt/x")
+        # 既定では remove_error は None
+        self.assertIsNone(data["worktree_remove_error"])
+
+    def test_finish_records_worktree_remove_error(self) -> None:
+        state = auto_publish_diary.PublishState(
+            parent_repo=self.parent_repo,
+            worktree_path="D:/wt/x",
+            article_path="a.md",
+            edit_url="https://e",
+            public_url="https://p",
+            pr_url="https://pr",
+        )
+        auto_publish_diary.finish(
+            state,
+            worktree_removed=False,
+            worktree_remove_error="fatal: 'D:/wt/x' is not a working tree",
+        )
+        data = self._read()
+        self.assertEqual(data["worktree_removed"], False)
+        self.assertEqual(
+            data["worktree_remove_error"], "fatal: 'D:/wt/x' is not a working tree"
+        )
+
+
+class SummarizeStderrTest(unittest.TestCase):
+    def test_returns_none_for_empty(self) -> None:
+        self.assertIsNone(auto_publish_diary._summarize_stderr(None))
+        self.assertIsNone(auto_publish_diary._summarize_stderr(""))
+        self.assertIsNone(auto_publish_diary._summarize_stderr("   \n\n  "))
+
+    def test_collapses_multiline_to_single_line(self) -> None:
+        self.assertEqual(
+            auto_publish_diary._summarize_stderr("line1\nline2\n   line3  "),
+            "line1 line2 line3",
+        )
 
 
 if __name__ == "__main__":

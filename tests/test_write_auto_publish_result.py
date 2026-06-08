@@ -65,6 +65,7 @@ class WriteAutoPublishResultTest(unittest.TestCase):
             "merged": True,
             "worktree_removed": True,
             "worktree_path": None,
+            "worktree_remove_error": None,
         })
 
     def test_success_with_worktree_not_removed(self) -> None:
@@ -82,6 +83,25 @@ class WriteAutoPublishResultTest(unittest.TestCase):
         data = self._read_result()
         self.assertEqual(data["worktree_removed"], False)
         self.assertEqual(data["worktree_path"], "D:/GitHub/becky3/article-writer-wt-auto-20260520")
+        self.assertIsNone(data["worktree_remove_error"])
+
+    def test_success_with_worktree_remove_error_via_cli(self) -> None:
+        result = run_script([
+            "--parent-repo", str(self.parent_repo),
+            "--status", "ok",
+            "--article-path", "articles/hatena/2026-05-20-diary.md",
+            "--edit-url", "https://blog.hatena.ne.jp/ID/b/edit?entry=1",
+            "--public-url", "https://blog/entry/2026/05/20/000000",
+            "--pr-url", "https://github.com/becky3/article-writer/pull/101",
+            "--worktree-removed", "false",
+            "--worktree-path", "D:/wt/x",
+            "--worktree-remove-error", "fatal: 'D:/wt/x' is not a working tree",
+        ])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = self._read_result()
+        self.assertEqual(
+            data["worktree_remove_error"], "fatal: 'D:/wt/x' is not a working tree"
+        )
 
     def test_error_minimum_fields(self) -> None:
         result = run_script([
@@ -103,6 +123,7 @@ class WriteAutoPublishResultTest(unittest.TestCase):
             "merged": False,
             "worktree_removed": False,
             "worktree_path": None,
+            "worktree_remove_error": None,
         })
 
     def test_error_with_partial_progress(self) -> None:
@@ -242,6 +263,44 @@ class BuildResultFunctionTest(unittest.TestCase):
         self.assertEqual(result["merged"], True)
         self.assertEqual(result["worktree_removed"], True)
         self.assertIsNone(result["worktree_path"])
+
+    def test_build_result_ok_with_worktree_remove_error(self) -> None:
+        result = write_auto_publish_result.build_result(
+            status="ok",
+            article_path="a.md",
+            edit_url="https://e",
+            public_url="https://p",
+            pr_url="https://pr",
+            worktree_removed=False,
+            worktree_path="D:/wt/x",
+            worktree_remove_error="fatal: cannot remove 'D:/wt/x'",
+        )
+        self.assertEqual(result["worktree_removed"], False)
+        self.assertEqual(result["worktree_path"], "D:/wt/x")
+        self.assertEqual(result["worktree_remove_error"], "fatal: cannot remove 'D:/wt/x'")
+
+    def test_build_result_ok_normalizes_remove_error_when_removed(self) -> None:
+        # 削除成功時は worktree_remove_error を渡されても None に正規化される
+        result = write_auto_publish_result.build_result(
+            status="ok",
+            article_path="a.md",
+            edit_url="https://e",
+            public_url="https://p",
+            pr_url="https://pr",
+            worktree_removed=True,
+            worktree_remove_error="stale value",
+        )
+        self.assertIsNone(result["worktree_remove_error"])
+
+    def test_build_result_error_includes_remove_error_field_as_null(self) -> None:
+        # スキーマ均一化: error 時も worktree_remove_error キーは存在し None
+        result = write_auto_publish_result.build_result(
+            status="error",
+            failed_phase="publish",
+            error="HTTP 401",
+        )
+        self.assertIn("worktree_remove_error", result)
+        self.assertIsNone(result["worktree_remove_error"])
 
     def test_build_result_error_includes_partial_fields(self) -> None:
         result = write_auto_publish_result.build_result(
