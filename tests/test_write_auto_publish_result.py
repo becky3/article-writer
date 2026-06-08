@@ -279,8 +279,13 @@ class BuildResultFunctionTest(unittest.TestCase):
         self.assertEqual(result["worktree_path"], "D:/wt/x")
         self.assertEqual(result["worktree_remove_error"], "fatal: cannot remove 'D:/wt/x'")
 
-    def test_build_result_ok_normalizes_remove_error_when_removed(self) -> None:
-        # 削除成功時は worktree_remove_error を渡されても None に正規化される
+    def test_build_result_ok_preserves_remove_error_when_removed(self) -> None:
+        """rmdir フォールバック発動シグナル経路（#245）.
+
+        worktree_removed=True かつ worktree_remove_error 非 null の組み合わせは
+        「git remove は失敗したが rmdir フォールバックで救済された」ことを表すシグナル。
+        正規化（None 化）してしまうと根本原因の継続観測ができなくなるため、ここで保持する。
+        """
         result = write_auto_publish_result.build_result(
             status="ok",
             article_path="a.md",
@@ -288,9 +293,14 @@ class BuildResultFunctionTest(unittest.TestCase):
             public_url="https://p",
             pr_url="https://pr",
             worktree_removed=True,
-            worktree_remove_error="stale value",
+            worktree_remove_error="error: failed to delete '/wt/x': Permission denied",
         )
-        self.assertIsNone(result["worktree_remove_error"])
+        self.assertEqual(
+            result["worktree_remove_error"],
+            "error: failed to delete '/wt/x': Permission denied",
+        )
+        # 成功時は worktree_path は None に正規化される（既存仕様）
+        self.assertIsNone(result["worktree_path"])
 
     def test_build_result_error_includes_remove_error_field_as_null(self) -> None:
         # スキーマ均一化: error 時も worktree_remove_error キーは存在し None
