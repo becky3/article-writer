@@ -114,10 +114,13 @@ grep -oE '^📁 生成記事: articles/hatena/[0-9]{4}-[0-9]{2}-[0-9]{2}-diary\.
 ARTICLE_PATH=$(git -C "$WORKTREE" status --porcelain articles/hatena/ \
   | awk '$1 == "??" {print $2}' \
   | grep -E '^articles/hatena/[0-9]{4}-[0-9]{2}-[0-9]{2}-diary\.md$' \
+  | sort -r \
   | head -1)
 ```
 
 設計意図: setup 時点で main を checkout した worktree 内では既存記事は全て tracked。`/write-hatena-diary` の Phase 8（ファイル出力）で Write された新規記事だけが untracked（`??`）として現れるため、git status で確実に特定できる。
+
+複数の untracked 日記が存在するケース（前回失敗で残置された旧記事と新記事が同居する等）に備えて `sort -r` で日付降順（ファイル名先頭 `YYYY-MM-DD` の降順）に並べ、最新日付の 1 件を採用する。`📁 生成記事:` 抽出ロジック側の「複数行抽出時は実行日一致を優先・なければ最新日付」と同じ選定方針を維持する。
 
 フォールバックでも `ARTICLE_PATH` が空のままなら（記事ファイル自体が生成されていない場合）次ステップへ空のまま渡す。`finalize` が `failed_phase=write` で記録する。
 

@@ -63,7 +63,7 @@ argument-hint: "[YYYY-MM-DD | MM-DD] [--auto-publish]"
    2. 過去記事が 0 件で `D_last` が取得できない場合はエラー停止:
 
       ```text
-      エラー: articles/hatena/ に過去記事が存在しません。初回実行は日付指定（YYYY-MM-DD）で起動してください
+      エラー: articles/hatena/ に過去記事が存在しません。初回実行は日付指定（YYYY-MM-DD または MM-DD）で起動してください
       ```
 
    3. `D_last + 1 日` を `DATE_FROM`、実行日のローカル日付を `DATE_TO` とする探索範囲を確定。`DATE_FROM > DATE_TO` の場合はエラー停止:
@@ -134,9 +134,13 @@ argument-hint: "[YYYY-MM-DD | MM-DD] [--auto-publish]"
 
 ### Phase 4: 素材取得
 
-1. 当該日（`TARGET_DATE`）のジャーナルを `rag_get_document(source_id=...)` で全文取得する
-2. `rag_list_by_date_range(date_from=TARGET_DATE, date_to=TARGET_DATE, source_type="bluesky", limit=100)` で当該日の Bluesky 投稿一覧を取得する（**本ステップは必須実行**、0 件でも続行）
-3. 各投稿について `rag_get_document(source_id=..., format="original")` で投稿 JSON 全体を取得する。
+1. **ジャーナル全文取得**:
+   - Phase 2 で取得済の `rag_list_by_date_range` 結果（`source_type="journal"`）から `TARGET_DATE` の journal エントリの `source_id` を全て取り出す
+   - 各 `source_id` について `rag_get_document(source_id=...)` を呼んで全文を取得する
+   - 当該日にジャーナルが複数件ある場合は全件を取得する（記事化対象の選別は Phase 7 で実施）
+   - 取得した `source_id` は Phase 5 でリポジトリ特定にも参照する
+2. **Bluesky 一覧取得**: `rag_list_by_date_range(date_from=TARGET_DATE, date_to=TARGET_DATE, source_type="bluesky", limit=100)` で当該日の Bluesky 投稿一覧を取得する（**本ステップは必須実行**、0 件でも続行）
+3. **Bluesky 投稿の詳細取得**: 各投稿について `rag_get_document(source_id=..., format="original")` で投稿 JSON 全体を取得する。
 
     **`format="original"` 指定必須**（デフォルトの `format="text"` では本文以外のメタデータが失われ、`cid` 等が取得できない）。
 
