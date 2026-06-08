@@ -194,6 +194,7 @@ class CleanupTest(unittest.TestCase):
             mock.patch.object(auto_publish_diary.os, "chdir"),
             mock.patch.object(auto_publish_diary.os, "listdir") as listdir_mock,
             mock.patch.object(auto_publish_diary.os, "rmdir") as rmdir_mock,
+            mock.patch.object(auto_publish_diary.time, "sleep") as sleep_mock,
         ):
             run_mock.side_effect = [self._make_proc(0), self._make_proc(0), self._make_proc(0)]
             removed, error = auto_publish_diary.cleanup(
@@ -203,6 +204,8 @@ class CleanupTest(unittest.TestCase):
         self.assertIsNone(error)
         listdir_mock.assert_not_called()
         rmdir_mock.assert_not_called()
+        # git remove 成功経路ではフォールバックも sleep も発生しないことを固定
+        sleep_mock.assert_not_called()
 
     def test_falls_back_to_rmdir_when_dir_is_empty(self) -> None:
         with (
@@ -211,6 +214,7 @@ class CleanupTest(unittest.TestCase):
             mock.patch.object(auto_publish_diary.os.path, "isdir", return_value=True),
             mock.patch.object(auto_publish_diary.os, "listdir", return_value=[]) as listdir_mock,
             mock.patch.object(auto_publish_diary.os, "rmdir") as rmdir_mock,
+            mock.patch.object(auto_publish_diary.time, "sleep") as sleep_mock,
         ):
             run_mock.side_effect = [
                 self._make_proc(1, "error: failed to delete '/parent/wt-x': Permission denied"),
@@ -226,6 +230,8 @@ class CleanupTest(unittest.TestCase):
         )
         listdir_mock.assert_called_once_with("/parent/wt-x")
         rmdir_mock.assert_called_once_with("/parent/wt-x")
+        # 初回試行で成功する経路では sleep を呼ばないことを固定（不要な待機を避ける）
+        sleep_mock.assert_not_called()
         # rmdir フォールバック後も branch -D / pull --ff-only が従前通り呼ばれることを固定する
         self.assertEqual(len(run_mock.call_args_list), 3)
         self.assertEqual(
@@ -241,8 +247,12 @@ class CleanupTest(unittest.TestCase):
             ["git", "-C", "/parent", "pull", "--ff-only", "origin", "main"],
         )
 
-    def test_returns_false_when_rmdir_raises_oserror(self) -> None:
-        """rmdir 自体が OSError を投げた場合（TOCTOU race 等）に silent 脱出することを確認。"""
+    def test_returns_false_when_rmdir_raises_oserror_after_all_retries(self) -> None:
+        """rmdir が上限まで連続 OSError を投げた場合に最終的に諦め silent 脱出することを確認。
+
+        PR #246 の単発フォールバックでは PR #247 で再失敗を観測したため、リトライ + バックオフへ
+        変更（#245 追加対応）。本テストは上限回数まで連続失敗するシナリオを担保する。
+        """
         with (
             mock.patch.object(auto_publish_diary, "_run") as run_mock,
             mock.patch.object(auto_publish_diary.os, "chdir"),
@@ -251,6 +261,7 @@ class CleanupTest(unittest.TestCase):
             mock.patch.object(
                 auto_publish_diary.os, "rmdir", side_effect=PermissionError("denied")
             ) as rmdir_mock,
+            mock.patch.object(auto_publish_diary.time, "sleep") as sleep_mock,
         ):
             run_mock.side_effect = [
                 self._make_proc(1, "error: failed to delete '/parent/wt-x': Permission denied"),
@@ -264,7 +275,53 @@ class CleanupTest(unittest.TestCase):
         self.assertEqual(
             error, "error: failed to delete '/parent/wt-x': Permission denied"
         )
-        rmdir_mock.assert_called_once_with("/parent/wt-x")
+        self.assertEqual(rmdir_mock.call_count, auto_publish_diary.MAX_RMDIR_ATTEMPTS)
+        # バックオフ間隔: 試行 i のディレイは (i + 1) * RMDIR_BACKOFF_STEP。
+        # 最終試行（i = MAX_RMDIR_ATTEMPTS - 1）後は sleep しないため呼び出し回数は MAX_RMDIR_ATTEMPTS - 1
+        expected_sleeps = [
+            mock.call((i + 1) * auto_publish_diary.RMDIR_BACKOFF_STEP)
+            for i in range(auto_publish_diary.MAX_RMDIR_ATTEMPTS - 1)
+        ]
+        self.assertEqual(sleep_mock.call_args_list, expected_sleeps)
+
+    def test_succeeds_when_rmdir_recovers_after_retries(self) -> None:
+        """rmdir が数回 OSError → 最終的に成功するシナリオでリトライが正しく機能することを確認。
+
+        Windows の Permission denied が数秒間持続する観察（PR #247）に対する救済経路。
+        """
+        # 2 回失敗後に成功するシナリオ（合計 3 回呼び出し、間に 2 回 sleep）
+        with (
+            mock.patch.object(auto_publish_diary, "_run") as run_mock,
+            mock.patch.object(auto_publish_diary.os, "chdir"),
+            mock.patch.object(auto_publish_diary.os.path, "isdir", return_value=True),
+            mock.patch.object(auto_publish_diary.os, "listdir", return_value=[]),
+            mock.patch.object(
+                auto_publish_diary.os,
+                "rmdir",
+                side_effect=[PermissionError("denied"), PermissionError("denied"), None],
+            ) as rmdir_mock,
+            mock.patch.object(auto_publish_diary.time, "sleep") as sleep_mock,
+        ):
+            run_mock.side_effect = [
+                self._make_proc(1, "error: failed to delete '/parent/wt-x': Permission denied"),
+                self._make_proc(0),
+                self._make_proc(0),
+            ]
+            removed, error = auto_publish_diary.cleanup(
+                "/parent", "/parent/wt-x", "feature/x"
+            )
+        self.assertTrue(removed)
+        # remove_error は git の元 stderr を保持（フォールバック発動シグナル）
+        self.assertEqual(
+            error, "error: failed to delete '/parent/wt-x': Permission denied"
+        )
+        self.assertEqual(rmdir_mock.call_count, 3)
+        # 失敗 2 回の間に sleep 2 回（成功した 3 回目の後は sleep しない）
+        expected_sleeps = [
+            mock.call(1 * auto_publish_diary.RMDIR_BACKOFF_STEP),
+            mock.call(2 * auto_publish_diary.RMDIR_BACKOFF_STEP),
+        ]
+        self.assertEqual(sleep_mock.call_args_list, expected_sleeps)
 
     def test_returns_false_when_dir_not_empty(self) -> None:
         with (
@@ -275,6 +332,7 @@ class CleanupTest(unittest.TestCase):
                 auto_publish_diary.os, "listdir", return_value=["stray.txt"]
             ),
             mock.patch.object(auto_publish_diary.os, "rmdir") as rmdir_mock,
+            mock.patch.object(auto_publish_diary.time, "sleep") as sleep_mock,
         ):
             run_mock.side_effect = [
                 self._make_proc(1, "error: failed to delete '/parent/wt-x': Permission denied"),
@@ -289,6 +347,8 @@ class CleanupTest(unittest.TestCase):
             error, "error: failed to delete '/parent/wt-x': Permission denied"
         )
         rmdir_mock.assert_not_called()
+        # 非空 dir 経路では初回 iteration で break するため sleep も発生しないことを固定
+        sleep_mock.assert_not_called()
 
 
 class SummarizeStderrTest(unittest.TestCase):
