@@ -1,6 +1,6 @@
 """進行パターンを 1 つ選定する（フォールバックの機械的選定）.
 
-仕様: .claude/skills/write-hatena-diary/SKILL.md（Phase 4-4 進行パターン選定）
+仕様: .claude/skills/write-hatena-diary/SKILL.md（Phase 7 進行パターン選定）
 
 役割:
 
