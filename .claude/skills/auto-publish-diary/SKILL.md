@@ -104,7 +104,27 @@ WORKTREE=$(grep '^WORKTREE: ' "$SETUP_LOG" | sed 's/^WORKTREE: //')
 grep -oE '^📁 生成記事: articles/hatena/[0-9]{4}-[0-9]{2}-[0-9]{2}-diary\.md$' | sed 's/^📁 生成記事: //'
 ```
 
-抽出できた相対パスを `ARTICLE_PATH` とする。生成に失敗して抽出が 0 件でも停止せず、空のまま次ステップへ渡す（`finalize` が `failed_phase=write` で記録する）。複数行抽出時は実行日（`date '+%Y-%m-%d'`）一致を優先、なければ最新日付の 1 件を採る。
+抽出できた相対パスを `ARTICLE_PATH` とする。複数行抽出時は実行日（`date '+%Y-%m-%d'`）一致を優先、なければ最新日付の 1 件を採る。
+
+#### 抽出 0 件時のフォールバック
+
+`/write-hatena-diary` Phase 10 の構造化メッセージが stdout に現れなかった経路（end_turn による打ち切り / Phase 9 内部停止 / 想定外例外等）を救済する目的で、抽出が 0 件のときは worktree 内の git 未追跡ファイルから新規記事を特定するフォールバックに進む:
+
+```bash
+ARTICLE_PATH=$(git -C "$WORKTREE" status --porcelain articles/hatena/ \
+  | awk '$1 == "??" {print $2}' \
+  | grep -E '^articles/hatena/[0-9]{4}-[0-9]{2}-[0-9]{2}-diary\.md$' \
+  | sort -r \
+  | head -1)
+```
+
+設計意図: setup 時点で main を checkout した worktree 内では既存記事は全て tracked。`/write-hatena-diary` の Phase 8（ファイル出力）で Write された新規記事だけが untracked（`??`）として現れるため、git status で確実に特定できる。
+
+複数の untracked 日記が存在するケース（前回失敗で残置された旧記事と新記事が同居する等）に備えて `sort -r` で日付降順（ファイル名先頭 `YYYY-MM-DD` の降順）に並べ、最新日付の 1 件を採用する。`📁 生成記事:` 抽出ロジック側の「複数行抽出時は実行日一致を優先・なければ最新日付」と同じ選定方針を維持する。
+
+フォールバックでも `ARTICLE_PATH` が空のままなら（記事ファイル自体が生成されていない場合）次ステップへ空のまま渡す。`finalize` が `failed_phase=write` で記録する。
+
+`📁 生成記事:` 出力経由かフォールバック経由かの区別を result.json に残す処理は持たない。多層防御は Phase 10 未到達リスクの吸収が目的で、Phase 10 出力の劣化監視は `/write-hatena-diary` SKILL.md 側で構造的に担保する責務分離としている。
 
 ### ステップ 3: finalize（Phase 2〜5）
 
@@ -130,7 +150,7 @@ result.json への書き込みと終了コードは `scripts/auto_publish_diary.
 | 状況 | failed_phase | 後続 |
 |---|---|---|
 | worktree 内からの起動 / 親リポに未コミット変更 / `git switch main`・`pull` 失敗 / 同名ブランチ既存 / `git worktree add` 失敗 / `.env` 不整合 | environment | 以降スキップ |
-| `/write-hatena-diary` 失敗・生成記事 0 件（`finalize` に空パスが渡る） | write | publish 以降スキップ、worktree 残置 |
+| `/write-hatena-diary` 失敗・生成記事 0 件（`finalize` に空パスが渡る。記事ファイル自体が生成されていない場合に限る。Phase 10 出力欠落でファイルは生成されている場合はステップ 2 のフォールバックで救済される） | write | publish 以降スキップ、worktree 残置 |
 | `publish_hatena.py` 失敗（HTTP 4xx/5xx・keyring 未登録等）/ 編集 URL 組み立て失敗 | publish | git 以降スキップ、worktree + 記事 md は残置（再投稿可能） |
 | フロントマター読取失敗 / `git commit`・`push` 失敗 / `gh pr create` 失敗 / `gh pr merge` 失敗かつリモート state ≠ `MERGED` | git | 後続スキップ、worktree 残置 |
 | `gh pr merge` exit 非 0 だがリモート state = `MERGED` | (なし) | warning のみ。Phase 4 へ継続（#219） |

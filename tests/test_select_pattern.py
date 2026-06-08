@@ -1,6 +1,6 @@
 """select_pattern.py のユニットテスト.
 
-仕様: .claude/skills/write-hatena-diary/SKILL.md（Phase 4-4 進行パターン選定）
+仕様: .claude/skills/write-hatena-diary/SKILL.md（Phase 7 進行パターン選定）
 計画: aidlc-docs/plan-work/issue-205.md（テスト方針）
 
 実行:

@@ -109,7 +109,7 @@ flowchart LR
     User -->|/write-hatena-diary| DiarySkill[write-hatena-diary スキル]
     DiarySkill -->|素材取得| RAG
     DiarySkill -->|生成| DiaryArticle[articles/hatena/<br/>日記記事<br/>git 管理下]
-    DiaryArticle -->|Phase 5.5 で自動呼び出し| DiaryReview[review-hatena-diary<br/>4 観点並列]
+    DiaryArticle -->|Phase 9 で自動呼び出し| DiaryReview[review-hatena-diary<br/>4 観点並列]
     DiaryReview -->|指摘の triage 連携| Triage[/triage スキル]
     Triage -->|確定修正の適用| DiaryArticle
     DiaryArticle -->|/publish-hatena| HatenaPublish[はてなブログ<br/>下書き登録]
