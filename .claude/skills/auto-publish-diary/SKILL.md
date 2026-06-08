@@ -154,7 +154,7 @@ result.json への書き込みと終了コードは `scripts/auto_publish_diary.
 | `publish_hatena.py` 失敗（HTTP 4xx/5xx・keyring 未登録等）/ 編集 URL 組み立て失敗 | publish | git 以降スキップ、worktree + 記事 md は残置（再投稿可能） |
 | フロントマター読取失敗 / `git commit`・`push` 失敗 / `gh pr create` 失敗 / `gh pr merge` 失敗かつリモート state ≠ `MERGED` | git | 後続スキップ、worktree 残置 |
 | `gh pr merge` exit 非 0 だがリモート state = `MERGED` | (なし) | warning のみ。Phase 4 へ継続（#219） |
-| `git worktree remove` 失敗（Windows ロック等） | (なし) | warning のみ。`status=ok` + `worktree_removed=false` + `worktree_remove_error` に stderr 要約を格納して終了 |
+| `git worktree remove` 失敗（Windows ロック等） | (なし) | warning のみ。空ディレクトリなら `os.rmdir` フォールバックで救済（#245）。フォールバック成功時は `status=ok` + `worktree_removed=true` + `worktree_remove_error` に元 stderr 要約を保持して終了（rmdir フォールバック発動シグナル）。フォールバックも失敗した場合は `status=ok` + `worktree_removed=false` + `worktree_remove_error` を格納して終了 |
 | 外部コマンドのタイムアウト（120 秒超過） | 該当 Phase | error メッセージに「タイムアウト（120 秒）」を含めて識別可能にする |
 
 ## リカバリフロー

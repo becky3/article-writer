@@ -71,8 +71,10 @@ def build_result(
     - worktree_removed: cleanup で worktree が削除済みなら true。削除失敗時 / 失敗終了時は false
     - worktree_path: 削除失敗時は残置 worktree の絶対パス。削除済みなら None。
       worktree 作成前に失敗した場合は None
-    - worktree_remove_error: worktree 削除失敗時の `git worktree remove --force` stderr 1 行要約。
-      削除成功時 / status="error" 時は None（失敗そのものは `error` フィールドで報告される）
+    - worktree_remove_error: `git worktree remove --force` の stderr 1 行要約。
+      - status="error" 時 / `git worktree remove` 自体が呼ばれなかった場合は None
+      - `git worktree remove` が失敗したとき（`os.rmdir` フォールバックの成否に関わらず）は元 stderr を保持する
+      - `worktree_removed=true` + `worktree_remove_error` 非 null は「rmdir フォールバックが効いて削除成功」を意味する（#245）
     - failed_phase: status="error" のみ。失敗 Phase 名（`environment` / `write` / `publish` / `git`）。
       `cleanup` は仕様上 status="ok" で終了するため現れない。status="ok" 時はキー自体が省略される
     - error: status="error" のみのエラー要約 1 行。status="ok" 時はキー自体が省略される
@@ -87,7 +89,7 @@ def build_result(
             "merged": True,
             "worktree_removed": worktree_removed,
             "worktree_path": None if worktree_removed else worktree_path,
-            "worktree_remove_error": None if worktree_removed else worktree_remove_error,
+            "worktree_remove_error": worktree_remove_error,
         }
     return {
         "status": "error",

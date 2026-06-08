@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import json
 import pathlib
+import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 # scripts/ を import path に追加
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts"))
@@ -146,6 +148,147 @@ class FailFinishTest(unittest.TestCase):
         self.assertEqual(
             data["worktree_remove_error"], "fatal: 'D:/wt/x' is not a working tree"
         )
+
+    def test_finish_keeps_remove_error_on_rmdir_fallback(self) -> None:
+        """rmdir フォールバック発動シグナル経路（#245）: removed=True でも stderr を保持する。"""
+        state = auto_publish_diary.PublishState(
+            parent_repo=self.parent_repo,
+            worktree_path="D:/wt/x",
+            article_path="a.md",
+            edit_url="https://e",
+            public_url="https://p",
+            pr_url="https://pr",
+        )
+        auto_publish_diary.finish(
+            state,
+            worktree_removed=True,
+            worktree_remove_error="error: failed to delete 'D:/wt/x': Permission denied",
+        )
+        data = self._read()
+        self.assertEqual(data["worktree_removed"], True)
+        self.assertEqual(
+            data["worktree_remove_error"],
+            "error: failed to delete 'D:/wt/x': Permission denied",
+        )
+        # 削除済みフラグ系は従前どおり None 化される
+        self.assertIsNone(data["worktree_path"])
+
+
+class CleanupTest(unittest.TestCase):
+    """`cleanup()` の戻り値分岐（#245 Windows rmdir フォールバック）を検証する。
+
+    本番事象（Windows での `git worktree remove --force` の rmdir 段階失敗）は CI Linux 環境で
+    再現できないため、subprocess / os 呼び出しを mock してフォールバック分岐の論理整合のみを担保する。
+    """
+
+    def _make_proc(
+        self, returncode: int, stderr: str = ""
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=[], returncode=returncode, stdout="", stderr=stderr
+        )
+
+    def test_returns_true_when_git_remove_succeeds(self) -> None:
+        with (
+            mock.patch.object(auto_publish_diary, "_run") as run_mock,
+            mock.patch.object(auto_publish_diary.os, "chdir"),
+            mock.patch.object(auto_publish_diary.os, "listdir") as listdir_mock,
+            mock.patch.object(auto_publish_diary.os, "rmdir") as rmdir_mock,
+        ):
+            run_mock.side_effect = [self._make_proc(0), self._make_proc(0), self._make_proc(0)]
+            removed, error = auto_publish_diary.cleanup(
+                "/parent", "/parent/wt-x", "feature/x"
+            )
+        self.assertTrue(removed)
+        self.assertIsNone(error)
+        listdir_mock.assert_not_called()
+        rmdir_mock.assert_not_called()
+
+    def test_falls_back_to_rmdir_when_dir_is_empty(self) -> None:
+        with (
+            mock.patch.object(auto_publish_diary, "_run") as run_mock,
+            mock.patch.object(auto_publish_diary.os, "chdir"),
+            mock.patch.object(auto_publish_diary.os.path, "isdir", return_value=True),
+            mock.patch.object(auto_publish_diary.os, "listdir", return_value=[]) as listdir_mock,
+            mock.patch.object(auto_publish_diary.os, "rmdir") as rmdir_mock,
+        ):
+            run_mock.side_effect = [
+                self._make_proc(1, "error: failed to delete '/parent/wt-x': Permission denied"),
+                self._make_proc(0),
+                self._make_proc(0),
+            ]
+            removed, error = auto_publish_diary.cleanup(
+                "/parent", "/parent/wt-x", "feature/x"
+            )
+        self.assertTrue(removed)
+        self.assertEqual(
+            error, "error: failed to delete '/parent/wt-x': Permission denied"
+        )
+        listdir_mock.assert_called_once_with("/parent/wt-x")
+        rmdir_mock.assert_called_once_with("/parent/wt-x")
+        # rmdir フォールバック後も branch -D / pull --ff-only が従前通り呼ばれることを固定する
+        self.assertEqual(len(run_mock.call_args_list), 3)
+        self.assertEqual(
+            run_mock.call_args_list[0].args[0],
+            ["git", "-C", "/parent", "worktree", "remove", "--force", "/parent/wt-x"],
+        )
+        self.assertEqual(
+            run_mock.call_args_list[1].args[0],
+            ["git", "-C", "/parent", "branch", "-D", "feature/x"],
+        )
+        self.assertEqual(
+            run_mock.call_args_list[2].args[0],
+            ["git", "-C", "/parent", "pull", "--ff-only", "origin", "main"],
+        )
+
+    def test_returns_false_when_rmdir_raises_oserror(self) -> None:
+        """rmdir 自体が OSError を投げた場合（TOCTOU race 等）に silent 脱出することを確認。"""
+        with (
+            mock.patch.object(auto_publish_diary, "_run") as run_mock,
+            mock.patch.object(auto_publish_diary.os, "chdir"),
+            mock.patch.object(auto_publish_diary.os.path, "isdir", return_value=True),
+            mock.patch.object(auto_publish_diary.os, "listdir", return_value=[]),
+            mock.patch.object(
+                auto_publish_diary.os, "rmdir", side_effect=PermissionError("denied")
+            ) as rmdir_mock,
+        ):
+            run_mock.side_effect = [
+                self._make_proc(1, "error: failed to delete '/parent/wt-x': Permission denied"),
+                self._make_proc(0),
+                self._make_proc(0),
+            ]
+            removed, error = auto_publish_diary.cleanup(
+                "/parent", "/parent/wt-x", "feature/x"
+            )
+        self.assertFalse(removed)
+        self.assertEqual(
+            error, "error: failed to delete '/parent/wt-x': Permission denied"
+        )
+        rmdir_mock.assert_called_once_with("/parent/wt-x")
+
+    def test_returns_false_when_dir_not_empty(self) -> None:
+        with (
+            mock.patch.object(auto_publish_diary, "_run") as run_mock,
+            mock.patch.object(auto_publish_diary.os, "chdir"),
+            mock.patch.object(auto_publish_diary.os.path, "isdir", return_value=True),
+            mock.patch.object(
+                auto_publish_diary.os, "listdir", return_value=["stray.txt"]
+            ),
+            mock.patch.object(auto_publish_diary.os, "rmdir") as rmdir_mock,
+        ):
+            run_mock.side_effect = [
+                self._make_proc(1, "error: failed to delete '/parent/wt-x': Permission denied"),
+                self._make_proc(0),
+                self._make_proc(0),
+            ]
+            removed, error = auto_publish_diary.cleanup(
+                "/parent", "/parent/wt-x", "feature/x"
+            )
+        self.assertFalse(removed)
+        self.assertEqual(
+            error, "error: failed to delete '/parent/wt-x': Permission denied"
+        )
+        rmdir_mock.assert_not_called()
 
 
 class SummarizeStderrTest(unittest.TestCase):

@@ -375,7 +375,12 @@ def cmd_finalize(article_path: str) -> int:
         worktree_remove_error=worktree_remove_error,
     )
     if worktree_removed:
-        print("✅ /auto-publish-diary 全工程成功")
+        if worktree_remove_error:
+            print(
+                f"✅ /auto-publish-diary 全工程成功（rmdir フォールバックで救済: {worktree_remove_error}）"
+            )
+        else:
+            print("✅ /auto-publish-diary 全工程成功")
     else:
         detail = f" / stderr: {worktree_remove_error}" if worktree_remove_error else ""
         print(
@@ -422,10 +427,13 @@ def cleanup(
     未マージブランチに対して呼ぶと `git branch -D` で未マージ変更が失われる。
 
     Returns:
-        (worktree 削除成否, 削除失敗時の stderr 1 行要約).
-        Windows ロック等で失敗しても status=ok を保つため bool で返す。失敗時の
-        stderr は #240 観測強化の一環として 1 行要約で返し、呼び出し元が
-        result.json に伝播させる。
+        (worktree 削除成否, `git worktree remove --force` の stderr 1 行要約).
+        Windows で `git worktree remove --force` が rmdir 段階だけ Permission denied
+        で失敗するケース（#245）に対し、ディレクトリが空であれば `os.rmdir` で
+        フォールバックする。フォールバックで削除に成功した場合は第 1 戻り値を True
+        にしつつ、第 2 戻り値には git の元 stderr を保持する（result.json で
+        `worktree_removed=true` + `worktree_remove_error` 非 null の組み合わせを
+        「rmdir フォールバック発動」のシグナルとして残し、根本原因の継続観測を可能にする）。
     """
     # finalize は worktree を cwd として起動される。Windows では cwd が worktree 内に
     # ある間はディレクトリを削除できないため、remove 前に親リポへ chdir して cwd ロックを
@@ -436,6 +444,13 @@ def cleanup(
     )
     removed = remove_proc.returncode == 0
     remove_error = None if removed else _summarize_stderr(remove_proc.stderr)
+    if not removed:
+        try:
+            if os.path.isdir(worktree_path) and not os.listdir(worktree_path):
+                os.rmdir(worktree_path)
+                removed = True
+        except OSError as exc:
+            sys.stderr.write(f"WARNING: rmdir fallback failed: {exc}\n")
     # squash マージ後は -d が「not fully merged」で失敗するため -D で強制削除する。
     # gh pr merge --admin --squash 成功直後に限定して呼ぶため安全。失敗は無視
     _run(["git", "-C", parent_repo, "branch", "-D", branch_name])
