@@ -37,13 +37,14 @@ import write_auto_publish_result
 NETWORK_TIMEOUT = 120
 # 非対話・接続タイムアウトを強制する SSH オプション（パスフレーズ待ち等のハングを防ぐ）
 GIT_SSH_COMMAND = "ssh -o BatchMode=yes -o ConnectTimeout=30"
-# ハードリミット: rmdir フォールバックの試行回数上限。Windows の Permission denied は
-# git remove 直後から数秒間持続するため複数回の再試行が必要（#245 / PR #247 観測）。
-# 上限を解除可能にすると無限ループのリスクがあるため定数固定とする
-MAX_RMDIR_RETRY = 5
-# rmdir リトライ間のバックオフ刻み（秒）。試行 i のディレイは `(i + 1) * RMDIR_BACKOFF_STEP`。
-# 5 回試行で合計 7.5 秒（0.5+1.0+1.5+2.0+2.5）の待機となり、観測された Windows
-# ロックの解放時間内に収まる範囲
+# ハードリミット: rmdir フォールバックの総試行回数（initial + retries の合計）。
+# Windows の Permission denied は git remove 直後から数秒間持続するため複数回の再試行が
+# 必要（#245 / PR #247 観測）。上限を解除可能にすると無限ループのリスクがあるため定数固定とする
+MAX_RMDIR_ATTEMPTS = 6
+# rmdir リトライ間のバックオフ刻み（秒）。試行 i（0 始まり）の失敗後ディレイは
+# `(i + 1) * RMDIR_BACKOFF_STEP`。最終試行（i = MAX_RMDIR_ATTEMPTS - 1）後は sleep しない。
+# 6 試行 = 5 sleep（0.5+1.0+1.5+2.0+2.5）= 合計 7.5 秒の待機となり、観測された
+# Windows ロックの解放時間内に収まる範囲
 RMDIR_BACKOFF_STEP = 0.5
 
 
@@ -458,7 +459,7 @@ def cleanup(
     remove_error = None if removed else _summarize_stderr(remove_proc.stderr)
     if not removed:
         last_exc: OSError | None = None
-        for attempt in range(MAX_RMDIR_RETRY):
+        for attempt in range(MAX_RMDIR_ATTEMPTS):
             try:
                 if not (os.path.isdir(worktree_path) and not os.listdir(worktree_path)):
                     # ディレクトリ不在 or 非空ならフォールバック対象外。以降の再試行も無意味
@@ -468,11 +469,11 @@ def cleanup(
                 break
             except OSError as exc:
                 last_exc = exc
-                if attempt < MAX_RMDIR_RETRY - 1:
+                if attempt < MAX_RMDIR_ATTEMPTS - 1:
                     time.sleep((attempt + 1) * RMDIR_BACKOFF_STEP)
         if not removed and last_exc is not None:
             sys.stderr.write(
-                f"WARNING: rmdir fallback failed after {MAX_RMDIR_RETRY} retries: {last_exc}\n"
+                f"WARNING: rmdir fallback failed after {MAX_RMDIR_ATTEMPTS} attempts: {last_exc}\n"
             )
     # squash マージ後は -d が「not fully merged」で失敗するため -D で強制削除する。
     # gh pr merge --admin --squash 成功直後に限定して呼ぶため安全。失敗は無視

@@ -275,12 +275,12 @@ class CleanupTest(unittest.TestCase):
         self.assertEqual(
             error, "error: failed to delete '/parent/wt-x': Permission denied"
         )
-        self.assertEqual(rmdir_mock.call_count, auto_publish_diary.MAX_RMDIR_RETRY)
+        self.assertEqual(rmdir_mock.call_count, auto_publish_diary.MAX_RMDIR_ATTEMPTS)
         # バックオフ間隔: 試行 i のディレイは (i + 1) * RMDIR_BACKOFF_STEP。
-        # 最終試行（i = MAX_RMDIR_RETRY - 1）後は sleep しないため呼び出し回数は MAX_RMDIR_RETRY - 1
+        # 最終試行（i = MAX_RMDIR_ATTEMPTS - 1）後は sleep しないため呼び出し回数は MAX_RMDIR_ATTEMPTS - 1
         expected_sleeps = [
             mock.call((i + 1) * auto_publish_diary.RMDIR_BACKOFF_STEP)
-            for i in range(auto_publish_diary.MAX_RMDIR_RETRY - 1)
+            for i in range(auto_publish_diary.MAX_RMDIR_ATTEMPTS - 1)
         ]
         self.assertEqual(sleep_mock.call_args_list, expected_sleeps)
 
