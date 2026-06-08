@@ -38,7 +38,7 @@ argument-hint: "[YYYY-MM-DD | MM-DD] [--auto-publish]"
 |---|---|---|
 | 1 | 引数パース | `$ARGUMENTS` から `TARGET_DATE` と `AUTO_PUBLISH` を確定 |
 | 2 | 対象日の確定 | ジャーナル存在を確認し `TARGET_DATE` を確定（auto-next モード）/ 検証（単一日指定モード） |
-| 3 | 執筆前準備 | ガイド・テンプレート Read と過去記事メモを 1 つの Phase で実施 |
+| 3 | 執筆前準備 | ガイド・テンプレートを Read する |
 | 4 | 素材取得 | 当該日のジャーナル全文・Bluesky 投稿を MCP 経由で取得 |
 | 5 | 関連リポジトリ・Issue/PR の事実確認 | 記事化前に対象の事実を確認し誤認を防ぐ |
 | 6 | Bluesky 選別 | 引用候補を選ぶ |
@@ -120,17 +120,9 @@ argument-hint: "[YYYY-MM-DD | MM-DD] [--auto-publish]"
       日記はジャーナルを必須素材としています。日付指定を見直してください。
       ```
 
-### Phase 3: 執筆前準備（共通リソース + 過去記事メモ）
+### Phase 3: 執筆前準備
 
-執筆に必要なものを Phase 4 以降の前にまとめて読み込む。
-
-1. **執筆ガイド・テンプレート Read**: `quality-guidelines.md` / `narrative-guidelines.md` / `template-diary.md` を Read する。読み込んだ内容は Phase 7（記事生成）で共通利用する
-2. **過去記事メモ作成**: 過去記事を読み、今回の執筆改善につながる点を自分の言葉でメモする（本スキル内で `/review-hatena-diary` は呼ばない。Phase 9 の自動レビューとは別概念）
-   - 対象範囲: `articles/hatena/` 直下の `YYYY-MM-DD-*.md` のみ。`articles/hatena/archive/` は除外。ファイル名先頭 10 文字（`YYYY-MM-DD`）で日付降順ソートし、最新 12 本を Read する（Phase 1 の日付抽出規則と同じ）
-   - 過去記事が 12 本未満ならある分だけを対象。0 件でもエラーにせず、メモなしで Phase 4 に進む
-   - メモ先: `.tmp/hatena-improvement-memo/<TARGET_DATE>.md`（例: `.tmp/hatena-improvement-memo/2026-05-13.md`）。ディレクトリが存在しなければ作成。同名ファイルがあれば上書き。`.tmp/` は `.gitignore` 対象で commit に含まれない
-   - メモの観点・軸は本スキルでは指定しない。書き手が自由に「今回の執筆で改善できる点」を言葉にする（チェック項目化・観点列挙はしない。指標化すると指標だけ最適化される Goodhart 化を避ける）
-   - Phase 7（記事生成）で同ファイルを Read して執筆に反映する
+執筆ガイド・テンプレートを Read する: `quality-guidelines.md` / `narrative-guidelines.md` / `template-diary.md`。読み込んだ内容は Phase 7（記事生成）で共通利用する。
 
 ### Phase 4: 素材取得
 
@@ -188,11 +180,8 @@ argument-hint: "[YYYY-MM-DD | MM-DD] [--auto-publish]"
 3. 選んだ ID を当該記事のフロントマターに `pattern: <ID>` として書く（フロントマター生成時に含める。`title`/`date`/`category` と同じメタ情報）。パターンはトーン・展開方針として本文に反映するが、**ID・パターン名を本文には書かない**。published.jsonl への転記は publish 時に `publish_hatena.py` が自動で行う
 4. 選んだパターンの定義文（`narrative-guidelines.md`「進行パターン」の当該 ID）を読み返し、その定義を本文全体の支配的な構成・トーン方針として明示的に据えてから書く。定義から外れて平常運転に収束させない
 
-続いて本文を書く。**Phase 3 で `.tmp/hatena-improvement-memo/<TARGET_DATE>.md` に書き出したメモを Read し、その改善点を今回の執筆に反映する**。
-Phase 3 で読んだ過去記事の表現・展開・締め方をそのまま再利用してはならない（焼き直し・既視感の回避）。
-過去記事は改善方向に上書きするための参照であり、書き写すための参照ではない。
-Phase 3 の対象（最新 12 本）以外の `articles/hatena/**`・`articles/hatena/archive/**` は本文執筆時に参照しない。
-素材（ジャーナル・Bluesky）と物語世界の設定（`narrative-guidelines.md`）を主軸に、Phase 3 のメモを改善方向の指針として組み入れて新規に書く:
+続いて本文を書く。本文執筆時に `articles/hatena/**`・`articles/hatena/archive/**` の過去記事を参照しない。
+素材（ジャーナル・Bluesky）と物語世界の設定（`narrative-guidelines.md`）のみを主軸に新規に書く:
 
 1. **本文の構成・口調・展開は `narrative-guidelines.md`（物語世界）を制御点として書き手の裁量に任せる**。固定セクション・必須サブセクションは設けない
 2. **タイトル** の文字列は `narrative-guidelines.md`「タイトルの付け方」の方針に従って決め、フロントマター `title:` と本文 H1 を一致させる（一致ルールは `quality-guidelines.md`「タイトル一致」）
