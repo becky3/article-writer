@@ -47,3 +47,4 @@
 {"date": "2026-04-05", "title": "3.7 倍速くした日に、未コミットの変更を全部消した", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032041743625", "pattern": "J"}
 {"date": "2026-04-07", "title": "推定 7 分の削除が 4 秒になった、索引まるごと作り直し問題", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032041750162", "pattern": "I"}
 {"date": "2026-04-08", "title": "「考えるな」で画像解析が 8 倍速くなった話", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032042162959", "pattern": "F"}
+{"date": "2026-04-09", "title": "画像を読む新機能、動作確認でバグを7件潰した", "edit_url": "https://blog.hatena.ne.jp/beckyJPN/beckyjpn.hatenablog.com/atom/entry/14945776032042468214", "pattern": "B"}
