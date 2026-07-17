@@ -68,6 +68,16 @@ result.json のスキーマ・各キーの意味・正規化ルール・`status`
 | 0 | 全 Phase 成功（worktree 削除の成否によらず）。result.json は `status=ok` |
 | 1 | 失敗（result.json に `status=error` を書き込み済み。worktree は残置） |
 
+### 実行状態ファイル（in-flight マーカー）
+
+result.json と同じディレクトリ（`$PARENT_REPO/.tmp/auto-publish-diary/`）に、finalize 未到達検出用の状態ファイルを置く。ファイル名・ライフサイクルの SSoT は `scripts/write_auto_publish_result.py` のモジュール定数と docstring。
+
+| ファイル | 作成 | 削除 | 意味 |
+|---|---|---|---|
+| `in-flight` | `setup` 成功時 | result.json 書き込み時（成功・失敗とも） | 残存 + result.json 不在 = setup 成功後〜result.json 書き込み前に実行が途切れた（記事生成の途中で途絶したケースを含む） |
+| `stop-block-count` | Stop hook がブロック時に加算 | `setup` でリセット、result.json 書き込み時に削除 | Stop hook の無限ブロック防止カウンタ |
+| `session-id` | `setup` 成功時（自セッションの `CLAUDE_CODE_SESSION_ID` を記録） | result.json 書き込み時 | Stop hook がブロック対象を自動投稿セッション自身に限定するための自己識別子（並行セッションの誤ブロック防止） |
+
 ## 処理手順
 
 `scripts/auto_publish_diary.py` の `setup` / `finalize` を起動し、その間に LLM ステップ（記事生成）を挟む。各 Python コマンドが result.json への書き込みと終了コードを自前で行うため、本スキルは終了コードを見て分岐するだけでよい。
@@ -77,6 +87,7 @@ result.json のスキーマ・各キーの意味・正規化ルール・`status`
 親リポジトリの直下で **1 回だけ** 実行し、出力をファイルに保存してから終了コードを判定する（`setup` を 2 回起動するとブランチ名重複で必ず失敗するため、二重起動は厳禁）:
 
 ```bash
+PARENT_REPO=$(pwd)
 mkdir -p .tmp/auto-publish-diary
 SETUP_LOG=.tmp/auto-publish-diary/setup-stdout.log
 python scripts/auto_publish_diary.py setup > "$SETUP_LOG"
@@ -88,9 +99,12 @@ fi
 WORKTREE=$(grep '^WORKTREE: ' "$SETUP_LOG" | sed 's/^WORKTREE: //')
 ```
 
+`PARENT_REPO` はステップ 3 で親リポへ cd 復帰するために保持する。
+
 `setup` の責務:
 
-- 親リポ検証・clean 確認・main 最新化・worktree 作成・`.env` コピーを行う
+- 親リポ検証・clean 確認・main 最新化・前回残骸の掃除（`git worktree prune` + 空の `<repo>-wt-auto-*` ディレクトリ削除。非空の残骸は未リカバリ記事を守るため削除せず警告のみ）・worktree 作成・`.env` コピーを行う
+- 成功時は in-flight マーカー（`.tmp/auto-publish-diary/in-flight`）を作成する。マーカーは result.json 書き込みで削除され、「マーカーあり + result.json 不在」が finalize 未到達のシグナルになる（Stop hook が参照。「注意事項」参照）
 - 成功時は stdout に `WORKTREE: <絶対パス>` と `BRANCH: <ブランチ名>` を出力する
 - 失敗時は result.json（`status=error`、`failed_phase=environment`）を書き込み終了コード 1 で終了する
 
@@ -128,12 +142,17 @@ ARTICLE_PATH=$(git -C "$WORKTREE" status --porcelain articles/hatena/ \
 
 ### ステップ 3: finalize（Phase 2〜5）
 
-worktree 内で実行する:
+**親リポへ cd 復帰してから**、**worktree 側の** スクリプトを実行する:
 
 ```bash
-cd "$WORKTREE"
-python scripts/auto_publish_diary.py finalize --article-path "$ARTICLE_PATH"
+cd "$PARENT_REPO"
+python "$WORKTREE/scripts/auto_publish_diary.py" finalize --worktree "$WORKTREE" --article-path "$ARTICLE_PATH"
 ```
+
+- 親リポへ戻る理由: セッションの作業 cwd が worktree を掴んだまま Phase 4 の削除に入ると、Windows のディレクトリロック（`git worktree remove` の rmdir 段階の Permission denied、#245）の一因になりうるため、削除前に cwd を worktree の外へ出す
+- worktree 側のスクリプトを起動する理由: `publish_hatena` が `__file__` 基準で `.env` / `published.jsonl` を解決するため。親リポ側スクリプトを起動した場合は finalize 冒頭のガードが `failed_phase=environment` で検出する
+
+`finalize` の処理内容:
 
 - Phase 2: `publish_hatena.py` を subprocess 起動して下書き登録 → `published.jsonl` から `edit_url` を読み、編集ページ URL・公開 URL を組み立てる
 - Phase 3: git add / commit / push / `gh pr create` / `gh pr merge --squash --admin`（merge が exit 非 0 のときは `gh pr view --json state` で `MERGED` を確認できれば継続。Why は「注意事項」参照）
@@ -141,7 +160,7 @@ python scripts/auto_publish_diary.py finalize --article-path "$ARTICLE_PATH"
 - Phase 5: `status=ok` の result.json を書き込む
 - いずれかの Phase で失敗したら、`failed_phase` 付きの result.json を書き込み終了コード 1 で終了する
 
-`finalize` は `git rev-parse` で parent_repo / worktree / branch を導出するため、本スキルから渡すのは `--article-path` のみ。
+`finalize` は `--worktree` を基準に `git rev-parse` で parent_repo / branch を導出する（`--worktree` 省略時は従来互換で cwd から導出）。本スキルから渡すのは `--worktree` と `--article-path` のみ。
 
 ## エラーハンドリング一覧
 
@@ -150,6 +169,7 @@ result.json への書き込みと終了コードは `scripts/auto_publish_diary.
 | 状況 | failed_phase | 後続 |
 |---|---|---|
 | worktree 内からの起動 / 親リポに未コミット変更 / `git switch main`・`pull` 失敗 / 同名ブランチ既存 / `git worktree add` 失敗 / `.env` 不整合 | environment | 以降スキップ |
+| finalize の起動ミス（`--worktree` のパス不在 / 親リポ側スクリプトでの finalize 起動をガードが検出） | environment | publish 以降スキップ、worktree 残置（正しい起動形で finalize を再実行できる） |
 | `/write-hatena-diary` 失敗・生成記事 0 件（`finalize` に空パスが渡る。記事ファイル自体が生成されていない場合に限る。Phase 10 出力欠落でファイルは生成されている場合はステップ 2 のフォールバックで救済される） | write | publish 以降スキップ、worktree 残置 |
 | `publish_hatena.py` 失敗（HTTP 4xx/5xx・keyring 未登録等）/ 編集 URL 組み立て失敗 | publish | git 以降スキップ、worktree + 記事 md は残置（再投稿可能） |
 | フロントマター読取失敗 / `git commit`・`push` 失敗 / `gh pr create` 失敗 / `gh pr merge` 失敗かつリモート state ≠ `MERGED` | git | 後続スキップ、worktree 残置 |
@@ -163,8 +183,10 @@ result.json への書き込みと終了コードは `scripts/auto_publish_diary.
 
 | failed_phase | 状態 | 推奨リカバリ |
 |---|---|---|
+| （result.json 不在・`in-flight` マーカー残存） | finalize 未到達。worktree 残置、Hatena 未投稿・PR なし（生成記事は残っている場合とない場合がある） | worktree 内の生成記事の相対パスを特定し、親リポを cwd に `python "<worktree>/scripts/auto_publish_diary.py" finalize --worktree "<worktree>" --article-path <相対パス>` を手動実行（記事が無い場合も finalize が `failed_phase=write` で終端させる。通常は Stop hook が停止をブロックしてセッション内で完遂させる） |
 | `environment`（worktree 未作成） | 何も変更されていない | 失敗理由を解消（親リポを clean に / 同名ブランチを削除等）してから再実行 |
 | `environment`（`.env` 不整合） | worktree のみ残置 | 親リポの `.env` を整備 → `git worktree remove --force <worktree_path>` で撤去 → 再実行 |
+| `environment`（finalize 起動ミス） | worktree + 生成記事が残置、Hatena 未投稿 | 正しい起動形（worktree 側スクリプト + `--worktree` 指定）で finalize を再実行 |
 | `write` | worktree 残置 | ジャーナル素材を補ってから再実行。原因不明なら worktree 内で `/write-hatena-diary --auto-publish` を手動デバッグ |
 | `publish` | 記事 md 生成済み、Hatena 未投稿 | worktree 内で `python scripts/publish_hatena.py <date>` を手動再実行（HTTP エラー等は時間を置く） |
 | `git` | 記事 md + Hatena 下書き登録済み | worktree 内で `git add articles/hatena/ && git commit -m "diary: <date> の日記を追加"` → push → PR → merge を手動実施 |
@@ -186,6 +208,11 @@ result.json への書き込みと終了コードは `scripts/auto_publish_diary.
 ## 注意事項
 
 - 本スキルは **無人実行** が前提。`claude -p` 非対話モードでは `AskUserQuestion` がエラー扱いされるため発行しない
+- **finalize 未実行ガード（Stop hook）**: `.claude/scripts/auto-publish-stop-guard.sh`（`.claude/settings.json` の `Stop` hook）
+  - 動作: 「`in-flight` マーカーあり + result.json 不在」の停止をブロックし、finalize の実行を指示する
+  - ブロック対象の限定: `session-id` に記録されたセッション（= setup を実行した自動投稿セッション）のみ。並行する開発セッションは照合不一致で即通常停止（fail-open）
+  - 誤爆防止: マーカー作成から 2 時間超は非ブロック。ブロックは 1 実行あたり最大 2 回（超過時は通常停止し、result.json 不在として ai-assistant 側の失敗検知に委ねる）
+  - 設計意図: 記事生成（長い LLM ステップ）後の end_turn 打ち切りで finalize が丸ごと飛ぶ構造弱点への多層防御
 - レビューでの修正適用は `/write-hatena-diary --auto-publish` 内の書き手自己判断に従う
 - PR は `gh pr merge --admin --squash` で即マージするため、ブランチ保護ルールがあっても通る。CI 実行は main へのマージ後（post-merge）に発生する想定
 - **Phase 3 merge の判定二段化**: `gh pr merge` の exit code が非 0 でも、続けて
@@ -202,6 +229,7 @@ result.json への書き込みと終了コードは `scripts/auto_publish_diary.
 ## 関連
 
 - `scripts/auto_publish_diary.py`: Phase 0・2〜5 のオーケストレーション本体（`setup` / `finalize`）
+- `.claude/scripts/auto-publish-stop-guard.sh`: finalize 未実行ガード（Stop hook 本体。`.claude/settings.json` で登録）
 - `.claude/skills/write-hatena-diary/SKILL.md`: 記事生成スキル本体（`--auto-publish` 経由で呼ぶ）
 - `.claude/skills/review-hatena-diary/SKILL.md`: レビュースキル（`--auto-publish` 経由で呼ばれ書き手自己判断）
 - `.claude/skills/publish-hatena/SKILL.md`: はてな AtomPub 投稿スキル

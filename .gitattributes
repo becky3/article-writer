@@ -1,0 +1,3 @@
+# シェルスクリプトは常に LF でチェックアウトする（CRLF だと bash 実行時にエラーになるため。
+# core.autocrlf=true 環境でも hook スクリプト等が壊れないよう固定する）
+*.sh text eol=lf
