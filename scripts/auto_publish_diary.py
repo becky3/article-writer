@@ -5,10 +5,16 @@
 記事生成（Phase 1）は `/write-hatena-diary` という Claude スキル（LLM）であり
 スクリプト化できないため、本スクリプトは LLM ステップを挟んで 2 エントリに分かれる:
 
-- `setup`: Phase 0（親リポ検証・clean 確認・main 最新化・worktree 作成・.env コピー）。
-  worktree パスを stdout に `WORKTREE: <path>` 形式で出力する。
-- `finalize --article-path <相対パス>`: Phase 2〜5（Hatena 投稿・git commit/push/PR/merge・
-  worktree クリーンアップ・result.json 書き込み）。worktree 内を cwd として起動する。
+- `setup`: Phase 0（親リポ検証・clean 確認・main 最新化・前回残骸の掃除・worktree 作成・
+  .env コピー・in-flight マーカー作成）。worktree パスを stdout に `WORKTREE: <path>` 形式で
+  出力する。
+- `finalize --article-path <相対パス> [--worktree <絶対パス>]`: Phase 2〜5（Hatena 投稿・
+  git commit/push/PR/merge・worktree クリーンアップ・result.json 書き込み）。
+  `--worktree` 指定時は親リポを cwd として起動できる（セッションの作業 cwd を worktree から
+  外して Windows の削除ロック要因を減らすため）。省略時は従来通り worktree 内 cwd から導出する。
+  いずれの場合も **worktree 側の** scripts/auto_publish_diary.py を起動すること
+  （publish_hatena が `__file__` 基準で .env / published.jsonl を解決するため。起動元の
+  取り違えは Phase 2 前のガードで failed_phase=environment として検出される）。
 
 共有核 `publish_hatena.py` への呼び出し方針（interface 混在方式）:
 
@@ -29,6 +35,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from typing import NoReturn
 
 import publish_hatena
 import write_auto_publish_result
@@ -83,7 +90,7 @@ def _run(
     )
 
 
-def fail(state: PublishState, *, failed_phase: str, error: str) -> None:
+def fail(state: PublishState, *, failed_phase: str, error: str) -> NoReturn:
     """status=error の result.json を書き出して終了コード 1 で終了する（単一の失敗経路）。"""
     sys.stderr.write(f"[PHASE {failed_phase}] 失敗: {error}\n")
     result = write_auto_publish_result.build_result(
@@ -158,9 +165,7 @@ def cmd_setup() -> int:
     state = PublishState(parent_repo=parent_repo)
 
     # 前回残骸の result.json を削除する
-    result_path = (
-        pathlib.Path(parent_repo) / ".tmp" / "auto-publish-diary" / "result.json"
-    )
+    result_path = write_auto_publish_result.result_dir(parent_repo) / "result.json"
     result_path.parent.mkdir(parents=True, exist_ok=True)
     result_path.unlink(missing_ok=True)
 
@@ -196,6 +201,9 @@ def cmd_setup() -> int:
     worktree_path = os.path.join(parent_dir, f"{repo_name}-wt-auto-{now.strftime('%Y%m%d')}")
     state.branch_name = branch_name
 
+    # 前回実行の残骸を掃除する（今回の worktree 作成前）
+    sweep_stale_auto_worktrees(parent_repo, repo_name, parent_dir)
+
     # 同名ブランチ既存（同日二重実行）の事前検査
     if _run(
         ["git", "-C", parent_repo, "rev-parse", "--verify", f"refs/heads/{branch_name}"]
@@ -225,31 +233,185 @@ def cmd_setup() -> int:
             error=".env に HATENA_ID または HATENA_BLOG_ID が未設定",
         )
 
+    create_in_flight_marker(parent_repo, now.isoformat())
+
     print("[PHASE environment] 完了")
     print(f"WORKTREE: {worktree_path}")
     print(f"BRANCH: {branch_name}")
     return 0
 
 
+def create_in_flight_marker(parent_repo: str, timestamp: str) -> None:
+    """in-flight マーカーを作成し、Stop hook 用のセッション状態を初期化する。
+
+    マーカーは Stop hook が finalize 未実行の検出に使い、result.json 書き込み
+    （成功・失敗とも）で write_result_file が削除する。あわせて:
+
+    - 前回の Stop hook カウンタをリセット（削除）する
+    - 自セッションの `CLAUDE_CODE_SESSION_ID` を session-id ファイルに記録する。
+      Stop hook は記録された ID と一致するセッションのみブロックする（並行する
+      開発セッションの誤ブロック・二重 finalize を防ぐ）。env が無い環境
+      （claude 外からの手動実行等）では記録せず、ガードは発火しない（fail-open）
+
+    いずれの操作も失敗時はガードが効かなくなるだけなので、警告を出して実行自体は続行する。
+    """
+    marker_dir = write_auto_publish_result.result_dir(parent_repo)
+    try:
+        marker_dir.mkdir(parents=True, exist_ok=True)
+        (marker_dir / write_auto_publish_result.IN_FLIGHT_FILENAME).write_text(
+            timestamp + "\n", encoding="utf-8"
+        )
+    except OSError as exc:
+        sys.stderr.write(f"WARNING: in-flight マーカーの作成に失敗（続行）: {exc}\n")
+    try:
+        (marker_dir / write_auto_publish_result.STOP_BLOCK_COUNT_FILENAME).unlink(
+            missing_ok=True
+        )
+    except OSError as exc:
+        sys.stderr.write(f"WARNING: Stop hook カウンタのリセットに失敗（続行）: {exc}\n")
+    session_file = marker_dir / write_auto_publish_result.SESSION_ID_FILENAME
+    session_id = os.environ.get("CLAUDE_CODE_SESSION_ID", "").strip()
+    try:
+        # 前回残骸の古い ID を確実に消してから、今回のセッション ID を記録する
+        session_file.unlink(missing_ok=True)
+        if session_id:
+            session_file.write_text(session_id + "\n", encoding="utf-8")
+        else:
+            sys.stderr.write(
+                "WARNING: CLAUDE_CODE_SESSION_ID が未設定のため Stop hook ガードは発火しません\n"
+            )
+    except OSError as exc:
+        sys.stderr.write(f"WARNING: session-id の記録に失敗（続行）: {exc}\n")
+
+
+def sweep_stale_auto_worktrees(parent_repo: str, repo_name: str, parent_dir: str) -> None:
+    """前回実行の残骸（worktree 登録・空ディレクトリ）を掃除する。
+
+    Windows のロックで `git worktree remove --force` が rmdir 段階だけ失敗すると（#245）、
+    worktree 登録は解除済みの空ディレクトリが残る。ロックはセッション終了で解放されるため、
+    次回実行の本掃除で確実に収束させる。中身のあるディレクトリは未リカバリの生成記事を
+    含みうるため削除せず、警告のみ出す（サイレントに消さない）。
+    """
+    _run(["git", "-C", parent_repo, "worktree", "prune"])
+    prefix = f"{repo_name}-wt-auto-"
+    try:
+        entries = os.listdir(parent_dir)
+    except OSError as exc:
+        sys.stderr.write(f"WARNING: 残骸掃除のディレクトリ走査に失敗（続行）: {exc}\n")
+        return
+    removed_any = False
+    for name in sorted(entries):
+        if not name.startswith(prefix):
+            continue
+        path = os.path.join(parent_dir, name)
+        if not os.path.isdir(path):
+            continue
+        try:
+            if os.listdir(path):
+                print(f"WARNING: 前回残骸の worktree が非空のため削除しません: {path}")
+                continue
+            os.rmdir(path)
+            removed_any = True
+            print(f"[PHASE environment] 前回残骸の空 worktree ディレクトリを削除: {path}")
+        except OSError as exc:
+            sys.stderr.write(f"WARNING: 残骸ディレクトリの削除に失敗（続行）: {path}: {exc}\n")
+    # 「登録が残存したままの空ディレクトリ」型の残骸では、rmdir によって初めて登録が
+    # ダングリングし prune 対象になるため、削除後にもう一度 prune する
+    if removed_any:
+        _run(["git", "-C", parent_repo, "worktree", "prune"])
+
+
 # ---------------------------------------------------------------------------
 # Phase 2〜5: finalize
 # ---------------------------------------------------------------------------
-def _resolve_context() -> tuple[str, str, str]:
-    """worktree 内から parent_repo / worktree_path / branch_name を git 経由で導出する。"""
-    worktree_path = _run(["git", "rev-parse", "--show-toplevel"]).stdout.strip()
-    common_dir = _run(["git", "rev-parse", "--git-common-dir"]).stdout.strip()
+def _fallback_parent_repo() -> str:
+    """コンテキスト導出に失敗したとき、result.json の書き先とする親リポを cwd から求める。
+
+    cwd が親リポでも worktree 内でも `--git-common-dir` は親リポの `.git` を指す。
+    git 管理外なら cwd を返す（best effort。書けないよりは cwd 直下に残す方が診断できる）。
+    """
+    common = _run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]
+    ).stdout.strip()
+    if common:
+        return os.path.dirname(os.path.realpath(common))
+    return os.getcwd()
+
+
+def _resolve_context(worktree: str | None = None) -> tuple[str, str, str]:
+    """parent_repo / worktree_path / branch_name を git 経由で導出する。
+
+    `worktree` 指定時はそのパスを基準に導出する（cwd は問わない）。省略時は従来通り
+    cwd（worktree 内での起動を想定）から導出する。
+
+    Raises:
+        RuntimeError: git rev-parse の失敗・出力空（git 管理外のディレクトリ等）。
+            prune 済み残骸に `--worktree` を向けた場合などに該当し、放置すると
+            parent_repo が誤導出されて result.json が不可視の場所に書かれるため、
+            呼び出し元（cmd_finalize）で failed_phase=environment に合流させる
+    """
+    if worktree is not None:
+        worktree_path = os.path.realpath(worktree)
+        base = ["git", "-C", worktree_path, "rev-parse"]
+    else:
+        worktree_path = _run(["git", "rev-parse", "--show-toplevel"]).stdout.strip()
+        if not worktree_path:
+            raise RuntimeError("cwd が git 管理外です（--worktree 指定か worktree 内で起動）")
+        base = ["git", "rev-parse"]
+    common_proc = _run([*base, "--path-format=absolute", "--git-common-dir"])
+    common_dir = common_proc.stdout.strip()
+    if common_proc.returncode != 0 or not common_dir:
+        raise RuntimeError(
+            f"git リポジトリを解決できません: {worktree_path}"
+            f"（{_summarize_stderr(common_proc.stderr) or 'git rev-parse 出力空'}）"
+        )
+    branch_proc = _run([*base, "--abbrev-ref", "HEAD"])
+    branch_name = branch_proc.stdout.strip()
+    if branch_proc.returncode != 0 or not branch_name:
+        raise RuntimeError(
+            f"ブランチ名を解決できません: {worktree_path}"
+            f"（{_summarize_stderr(branch_proc.stderr) or 'git rev-parse 出力空'}）"
+        )
     parent_repo = os.path.dirname(os.path.realpath(common_dir))
-    branch_name = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip()
     return parent_repo, worktree_path, branch_name
 
 
-def cmd_finalize(article_path: str) -> int:
-    parent_repo, worktree_path, branch_name = _resolve_context()
+def cmd_finalize(article_path: str, worktree: str | None = None) -> int:
+    # --worktree の指定パスが実在しない場合、そのパスからは何も導出できないため、
+    # cwd（親リポ想定）から parent_repo を求めて result.json を書いた上で失敗終了する
+    if worktree is not None and not os.path.isdir(worktree):
+        state = PublishState(parent_repo=_fallback_parent_repo())
+        fail(
+            state,
+            failed_phase="environment",
+            error=f"--worktree のパスが存在しません: {worktree}",
+        )
+
+    try:
+        parent_repo, worktree_path, branch_name = _resolve_context(worktree)
+    except RuntimeError as exc:
+        state = PublishState(parent_repo=_fallback_parent_repo())
+        fail(state, failed_phase="environment", error=str(exc))
     state = PublishState(
         parent_repo=parent_repo,
         worktree_path=worktree_path,
         branch_name=branch_name,
     )
+
+    # publish_hatena は `__file__` 基準でリポジトリルート（.env / published.jsonl）を解決する。
+    # 親リポ側のスクリプトを起動すると読み先が worktree とズレて Phase 2 の URL 組み立てが
+    # 破綻するため、worktree 側の scripts/ から起動されていることを検証する
+    if os.path.normcase(os.path.realpath(str(publish_hatena.REPO_ROOT))) != os.path.normcase(
+        os.path.realpath(worktree_path)
+    ):
+        fail(
+            state,
+            failed_phase="environment",
+            error=(
+                "finalize は worktree 側の scripts/auto_publish_diary.py を起動してください"
+                f"（script root: {publish_hatena.REPO_ROOT} / worktree: {worktree_path}）"
+            ),
+        )
 
     # Phase 1（記事生成）の成否はここで判定する。article_path が空・不在なら write 失敗扱い
     if not article_path or not (pathlib.Path(worktree_path) / article_path).is_file():
@@ -448,9 +610,10 @@ def cleanup(
         + `worktree_remove_error` 非 null の組み合わせを「rmdir フォールバック発動」
         のシグナルとして残し、根本原因の継続観測を可能にする）。
     """
-    # finalize は worktree を cwd として起動される。Windows では cwd が worktree 内に
-    # ある間はディレクトリを削除できないため、remove 前に親リポへ chdir して cwd ロックを
-    # 解放する（git 呼び出し自体は -C で repo を指定済み。chdir は OS の cwd ロック対策）。
+    # finalize が worktree を cwd として起動された場合（--worktree 省略のレガシー経路）、
+    # Windows では cwd が worktree 内にある間はディレクトリを削除できないため、remove 前に
+    # 親リポへ chdir して cwd ロックを解放する（親リポ cwd 起動時は no-op 相当。
+    # git 呼び出し自体は -C で repo を指定済み。chdir は OS の cwd ロック対策）。
     os.chdir(parent_repo)
     remove_proc = _run(
         ["git", "-C", parent_repo, "worktree", "remove", "--force", worktree_path]
@@ -529,11 +692,16 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("setup", help="Phase 0: 環境準備・worktree 作成")
     p_fin = sub.add_parser("finalize", help="Phase 2〜5: 投稿・git・PR・merge・cleanup")
     p_fin.add_argument("--article-path", required=True, help="生成記事の worktree 相対パス")
+    p_fin.add_argument(
+        "--worktree",
+        default=None,
+        help="worktree の絶対パス（指定時は親リポ等どこからでも起動可。省略時は cwd から導出）",
+    )
     args = parser.parse_args(argv)
 
     if args.command == "setup":
         return cmd_setup()
-    return cmd_finalize(args.article_path)
+    return cmd_finalize(args.article_path, args.worktree)
 
 
 if __name__ == "__main__":

@@ -39,6 +39,22 @@ import pathlib
 import sys
 import tempfile
 
+# in-flight マーカー: setup 成功時に作成され、result.json 書き込みで削除される。
+# 「マーカーあり + result.json 不在」= 生成〜finalize 間で実行が途切れた状態を表し、
+# Stop hook（.claude/scripts/auto-publish-stop-guard.sh）が finalize 未実行の検出に使う
+IN_FLIGHT_FILENAME = "in-flight"
+# Stop hook のブロック回数カウンタ。setup でリセットし、result.json 書き込みで削除する
+STOP_BLOCK_COUNT_FILENAME = "stop-block-count"
+# 自動投稿セッションの自己識別ファイル。setup が自セッションの CLAUDE_CODE_SESSION_ID を
+# 記録し、Stop hook は「記録された ID と自分のセッション ID が一致するときだけ」ブロックする
+# （並行する開発セッションを誤ブロックしないため）。result.json 書き込みで削除する
+SESSION_ID_FILENAME = "session-id"
+
+
+def result_dir(parent_repo: str) -> pathlib.Path:
+    """result.json・in-flight マーカー等を配置する状態ディレクトリを返す."""
+    return pathlib.Path(parent_repo) / ".tmp" / "auto-publish-diary"
+
 
 def build_result(
     *,
@@ -113,10 +129,14 @@ def write_result_file(parent_repo: str, result: dict) -> None:
     書き込み途中のプロセス中断・ディスクフル等でも、既存 result.json の完全性を保つ
     （publish_hatena.py の published.jsonl 更新と同じパターン）。
 
+    書き込み成功後、in-flight マーカー・Stop hook カウンタ・session-id を削除する
+    （result.json が書かれた = 実行が終端に到達したため、Stop hook のブロック対象から外す）。
+    マーカー削除の失敗は結果伝達に影響しないため握りつぶす。
+
     Raises:
         OSError: ディレクトリ作成・テンポラリ作成・書き込み・置換のいずれか失敗時
     """
-    target_dir = pathlib.Path(parent_repo) / ".tmp" / "auto-publish-diary"
+    target_dir = result_dir(parent_repo)
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / "result.json"
     payload = json.dumps(result, ensure_ascii=False) + "\n"
@@ -131,6 +151,11 @@ def write_result_file(parent_repo: str, result: dict) -> None:
         except OSError:
             pass
         raise
+    for name in (IN_FLIGHT_FILENAME, STOP_BLOCK_COUNT_FILENAME, SESSION_ID_FILENAME):
+        try:
+            (target_dir / name).unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def validate(args: argparse.Namespace) -> str | None:

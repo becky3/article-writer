@@ -344,6 +344,45 @@ class BuildResultFunctionTest(unittest.TestCase):
             leftover = list(target.parent.glob(".result.json.*"))
             self.assertEqual(leftover, [])
 
+    def test_write_result_file_removes_in_flight_marker_and_counter(self) -> None:
+        """result.json 書き込みで in-flight マーカーと Stop hook カウンタが削除される。
+
+        「マーカーあり + result.json 不在」= finalize 未到達、を成立させるための終端処理。
+        status=ok / error のどちらの書き込みでも削除されることを担保する。
+        """
+        for status_kwargs in (
+            {"status": "ok", "article_path": "a.md", "edit_url": "https://e",
+             "public_url": "https://p", "pr_url": "https://pr", "worktree_removed": True},
+            {"status": "error", "failed_phase": "write", "error": "生成失敗"},
+        ):
+            with self.subTest(status=status_kwargs["status"]), tempfile.TemporaryDirectory() as d:
+                state_dir = write_auto_publish_result.result_dir(d)
+                state_dir.mkdir(parents=True)
+                marker = state_dir / write_auto_publish_result.IN_FLIGHT_FILENAME
+                counter = state_dir / write_auto_publish_result.STOP_BLOCK_COUNT_FILENAME
+                session = state_dir / write_auto_publish_result.SESSION_ID_FILENAME
+                marker.write_text("2026-07-17T04:30:00\n", encoding="utf-8")
+                counter.write_text("1\n", encoding="utf-8")
+                session.write_text("sid-12345\n", encoding="utf-8")
+
+                result = write_auto_publish_result.build_result(**status_kwargs)
+                write_auto_publish_result.write_result_file(d, result)
+
+                self.assertTrue((state_dir / "result.json").exists())
+                self.assertFalse(marker.exists(), f"status={status_kwargs['status']}")
+                self.assertFalse(counter.exists(), f"status={status_kwargs['status']}")
+                self.assertFalse(session.exists(), f"status={status_kwargs['status']}")
+
+    def test_write_result_file_succeeds_without_marker_files(self) -> None:
+        """マーカー・カウンタが存在しなくても write_result_file は正常終了する。"""
+        with tempfile.TemporaryDirectory() as d:
+            result = write_auto_publish_result.build_result(
+                status="error", failed_phase="environment", error="e"
+            )
+            write_auto_publish_result.write_result_file(d, result)
+            target = write_auto_publish_result.result_dir(d) / "result.json"
+            self.assertTrue(target.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

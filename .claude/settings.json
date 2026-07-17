@@ -1,5 +1,17 @@
 {
   "env": {
     "WORKTREE_DISABLED": "1"
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/scripts/auto-publish-stop-guard.sh\""
+          }
+        ]
+      }
+    ]
   }
 }
